@@ -10,7 +10,7 @@ import {
     CheckCircle2, RefreshCw, GitMerge, Briefcase, GraduationCap, Code2, FileText,
     Camera, Save,
 } from 'lucide-react';
-import { useProfile, Profile as ProfileType, Experience, Education } from '../hooks/useSupabase';
+import { useProfile, useJobs, Profile as ProfileType, Experience, Education } from '../hooks/useSupabase';
 import { supabase } from '../utils/supabase/client';
 import { extractTextFromPDF } from '../utils/pdf';
 import { parseResume } from '../utils/ai';
@@ -99,6 +99,7 @@ async function uploadImage(bucket: string, path: string, file: File): Promise<st
 
 export default function Profile() {
     const { profile, loading, updateProfile } = useProfile();
+    const { jobs } = useJobs({ activeOnly: true });
     const toast = useToast();
 
     // Modal state
@@ -128,6 +129,9 @@ export default function Profile() {
     // Open to work
     const [togglingWork, setTogglingWork] = useState(false);
 
+    // Skills raw input (avoids comma-eating bug)
+    const [skillsRaw, setSkillsRaw] = useState('');
+
     // Inline About editing
     const [editingAbout, setEditingAbout] = useState(false);
     const [aboutDraft, setAboutDraft] = useState('');
@@ -142,7 +146,13 @@ export default function Profile() {
 
     const success = (msg: string) => { setSuccessMessage(msg); setShowSuccess(true); };
 
-    const handleOpenEdit = () => { if (profile) { setEditForm(profile); setIsEditOpen(true); } };
+    const handleOpenEdit = () => {
+        if (profile) {
+            setEditForm(profile);
+            setSkillsRaw(Array.isArray(profile.skills) ? profile.skills.join(', ') : '');
+            setIsEditOpen(true);
+        }
+    };
 
     const toggleOpenToWork = async () => {
         if (!profile || togglingWork) return;
@@ -208,7 +218,10 @@ export default function Profile() {
 
     const handleSave = async () => {
         try {
-            await updateProfile(editForm);
+            await updateProfile({
+                ...editForm,
+                skills: skillsRaw.split(',').map(s => s.trim()).filter(Boolean),
+            });
             setIsEditOpen(false);
             success('Profile updated!');
         } catch { toast('Failed to update profile', 'error'); }
@@ -723,9 +736,11 @@ export default function Profile() {
                     <Input type="number" min={0} value={editForm.experience_years ?? ''} onChange={e => setEditForm({ ...editForm, experience_years: Number(e.target.value) })} />
                 </FieldGroup>
                 <FieldGroup label="Skills (comma separated)">
-                    <Input placeholder="React, Node.js, Python"
-                        value={Array.isArray(editForm.skills) ? editForm.skills.join(', ') : (editForm.skills || '')}
-                        onChange={e => setEditForm({ ...editForm, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+                    <Input
+                        placeholder="React, Node.js, Python"
+                        value={skillsRaw}
+                        onChange={e => setSkillsRaw(e.target.value)}
+                    />
                 </FieldGroup>
                 <FieldGroup label="About">
                     <textarea rows={4} value={editForm.about || ''} onChange={e => setEditForm({ ...editForm, about: e.target.value })}
@@ -812,6 +827,7 @@ export default function Profile() {
                     candidateName={profile.full_name || 'My'}
                     profile={profile}
                     viewerRole="candidate"
+                    availableJobs={jobs}
                 />
             )}
         </DashboardLayout>

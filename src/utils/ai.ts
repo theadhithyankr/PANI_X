@@ -89,17 +89,43 @@ export async function parseResume(resumeText: string) {
     }
 }
 
+const SKILL_CASING: Record<string, string> = {
+    'javascript': 'JavaScript', 'typescript': 'TypeScript',
+    'html': 'HTML', 'css': 'CSS', 'sql': 'SQL', 'nosql': 'NoSQL',
+    'nodejs': 'Node.js', 'node': 'Node.js', 'reactjs': 'React.js',
+    'react': 'React', 'vuejs': 'Vue.js', 'vue': 'Vue',
+    'nextjs': 'Next.js', 'next': 'Next.js', 'nestjs': 'NestJS',
+    'graphql': 'GraphQL', 'mongodb': 'MongoDB', 'postgresql': 'PostgreSQL',
+    'mysql': 'MySQL', 'redis': 'Redis', 'aws': 'AWS', 'gcp': 'GCP',
+    'git': 'Git', 'docker': 'Docker', 'kubernetes': 'Kubernetes',
+    'firebase': 'Firebase', 'supabase': 'Supabase', 'tailwindcss': 'Tailwind CSS',
+    'tailwind': 'Tailwind CSS', 'figma': 'Figma', 'python': 'Python',
+    'java': 'Java', 'go': 'Go', 'rust': 'Rust', 'php': 'PHP',
+    'fastapi': 'FastAPI', 'django': 'Django', 'flask': 'Flask',
+    'express': 'Express', 'expressjs': 'Express.js', 'angular': 'Angular',
+    'svelte': 'Svelte', 'scss': 'SCSS', 'sass': 'Sass', 'jest': 'Jest',
+    'webpack': 'Webpack', 'vite': 'Vite', 'linux': 'Linux', 'git bash': 'Git Bash',
+    'c++': 'C++', 'c#': 'C#', 'unity': 'Unity', 'unreal': 'Unreal Engine',
+    'swift': 'Swift', 'kotlin': 'Kotlin', 'flutter': 'Flutter', 'dart': 'Dart',
+    'react native': 'React Native', 'expo': 'Expo', 'postman': 'Postman',
+};
+
+export function normalizeSkillName(skill: string): string {
+    const lower = skill.toLowerCase().trim();
+    if (SKILL_CASING[lower]) return SKILL_CASING[lower];
+    return lower.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
 export function calculateJobMatch(job: any, profile: any) {
     if (!profile) return { score: 10, reason: "Complete your profile to get matches.", details: [] };
 
     let score = 0;
-    const details: { label: string; type: 'success' | 'warning' | 'neutral'; score?: string }[] = [];
+    const details: { label: string; type: 'success' | 'warning' | 'neutral'; score?: string; category?: 'role' | 'skills' | 'experience' | 'location' }[] = [];
 
     // 0. Keyword/Role Match (CRITICAL - 30 pts)
     const jobTitle = (job.title || job.role || '').toLowerCase();
     const profileHeadline = (profile.headline || profile.role || '').toLowerCase();
 
-    // Simple tokenizer
     const stopWords = ['a', 'an', 'the', 'senior', 'junior', 'level', 'developer', 'engineer', 'manager', 'lead', 'intern', 'remote'];
     const jobTokens = jobTitle.split(/[\s/\-,]+/).filter((w: string) => w.length > 2 && !stopWords.includes(w));
     const profileTokens = profileHeadline.split(/[\s/\-,]+/).filter((w: string) => w.length > 2 && !stopWords.includes(w));
@@ -108,26 +134,32 @@ export function calculateJobMatch(job: any, profile: any) {
 
     if (titleMatches.length > 0) {
         score += 30;
-        details.push({ label: `Role Match: ${titleMatches[0]}`, type: 'success', score: '+30%' });
+        details.push({ label: `Role Match: ${job.title || job.role}`, type: 'success', score: '+30%', category: 'role' });
     }
 
     // 1. Skill Match (40 pts)
-    const jobSkills = (job.skills || []).map((s: string) => s.toLowerCase());
+    const jobSkillsOriginal: string[] = job.skills || [];
+    const jobSkills = jobSkillsOriginal.map((s: string) => s.toLowerCase());
     const profileSkills = (profile.skills || []).map((s: string) => s.toLowerCase());
 
     if (jobSkills.length > 0) {
-        const matchingSkills = jobSkills.filter((s: string) => profileSkills.some((ps: string) => ps.includes(s) || s.includes(ps)));
-        const missingSkills = jobSkills.filter((s: string) => !profileSkills.some((ps: string) => ps.includes(s) || s.includes(ps)));
+        const matchingSkillsLc = jobSkills.filter((s: string) => profileSkills.some((ps: string) => ps.includes(s) || s.includes(ps)));
+        const missingSkillsLc = jobSkills.filter((s: string) => !profileSkills.some((ps: string) => ps.includes(s) || s.includes(ps)));
 
-        const matchRatio = matchingSkills.length / jobSkills.length;
+        const matchRatio = matchingSkillsLc.length / jobSkills.length;
         const skillPoints = matchRatio * 40;
         score += skillPoints;
 
-        const perSkill = matchingSkills.length > 0 ? Math.round(skillPoints / matchingSkills.length) : 0;
+        const perSkill = matchingSkillsLc.length > 0 ? Math.round(skillPoints / matchingSkillsLc.length) : 0;
 
-        matchingSkills.forEach((skill: string) => details.push({ label: skill, type: 'success', score: `+${perSkill}%` }));
-        // Only show top 3 missing to avoid overwhelming
-        missingSkills.slice(0, 3).forEach((skill: string) => details.push({ label: `${skill} (Missing)`, type: 'warning', score: '0%' }));
+        matchingSkillsLc.forEach((lc: string) => {
+            const original = jobSkillsOriginal.find((s: string) => s.toLowerCase() === lc) || lc;
+            details.push({ label: normalizeSkillName(original), type: 'success', score: `+${perSkill}%`, category: 'skills' });
+        });
+        missingSkillsLc.slice(0, 3).forEach((lc: string) => {
+            const original = jobSkillsOriginal.find((s: string) => s.toLowerCase() === lc) || lc;
+            details.push({ label: normalizeSkillName(original), type: 'warning', score: '0%', category: 'skills' });
+        });
     } else {
         if (titleMatches.length > 0) score += 10;
     }
@@ -141,12 +173,12 @@ export function calculateJobMatch(job: any, profile: any) {
 
     if (userExp >= jobExp) {
         score += 20;
-        details.push({ label: `Experience Met (${userExp} yrs)`, type: 'success', score: '+20%' });
+        details.push({ label: `Experience Met (${userExp} yrs)`, type: 'success', score: '+20%', category: 'experience' });
     } else if (userExp >= jobExp - 1) {
         score += 10;
-        details.push({ label: `Experience Close (${userExp}/${jobExp} yrs)`, type: 'neutral', score: '+10%' });
+        details.push({ label: `Experience Close (${userExp}/${jobExp} yrs)`, type: 'neutral', score: '+10%', category: 'experience' });
     } else {
-        details.push({ label: `Experience Gap (${userExp} vs ${jobExp} yrs)`, type: 'warning', score: '0%' });
+        details.push({ label: `Experience Gap (${userExp} vs ${jobExp} yrs)`, type: 'warning', score: '0%', category: 'experience' });
     }
 
     // 3. Location (10 pts)
@@ -154,36 +186,27 @@ export function calculateJobMatch(job: any, profile: any) {
     if (job.location && profile.location) {
         const jobLoc = job.location.toLowerCase();
         const userLoc = profile.location.toLowerCase();
-
         if (jobLoc.includes(userLoc) || userLoc.includes(jobLoc)) {
             locationScore = 10;
-            details.push({ label: "Location Match", type: 'success', score: '+10%' });
+            details.push({ label: "Location Match", type: 'success', score: '+10%', category: 'location' });
         }
     }
-    // Remote match
     if (job.work_mode === 'Remote' || (job.location && job.location.toLowerCase().includes('remote'))) {
         if (locationScore < 10) {
             locationScore = 10;
-            details.push({ label: "Remote Friendly", type: 'success', score: '+10%' });
-        } else if (!details.some(d => d.label === "Location Match")) {
-            // Edge case where we didn't push Location Match but score is already 10 somehow
-            details.push({ label: "Remote Friendly", type: 'success', score: '+10%' });
+            details.push({ label: "Remote Friendly", type: 'success', score: '+10%', category: 'location' });
         }
     }
     score += locationScore;
 
-    // Normalize
-    if (titleMatches.length === 0 && score < 40) {
-        score = Math.min(score, 25);
-    }
-
+    if (titleMatches.length === 0 && score < 40) score = Math.min(score, 25);
     score = Math.min(98, Math.floor(score));
     score = Math.max(10, score);
 
     return {
         score,
-        reason: details.filter((d: { type: string; label: string }) => d.type === 'success').map((d: { type: string; label: string }) => d.label).slice(0, 3).join(' • '),
-        details // Structured for modal
+        reason: details.filter(d => d.type === 'success').map(d => d.label).slice(0, 3).join(' • '),
+        details,
     };
 }
 
@@ -276,9 +299,9 @@ Has Resume Uploaded: ${profile.resume_url ? 'Yes' : 'No'}${jobInfo}
 
 ${resumeText ? `\n--- START RESUME TEXT ---\n${resumeText.substring(0, 4000)}\n--- END RESUME TEXT ---\n` : '\n(No raw resume text provided, using basic profile data)\n'}
 
-Return ONLY raw JSON with this exact structure:
+Return ONLY raw JSON with this exact structure (compute all values from the actual resume/profile data — do NOT copy example numbers):
 {
-  "ats_score": 85,
+  "ats_score": <integer 0-100 computed from actual resume quality, keyword density, and completeness — NOT a fixed value>,
   "strengths": ["Clear quantifiable metric (e.g. increased X by Y%)", "Strong ATS keyword match for Z", "Proper use of action verbs"],
   "weaknesses": [
     {
@@ -351,11 +374,21 @@ function generateLocalAnalysis(profile: any, viewerRole: 'employer' | 'candidate
         ? `${profile.full_name || 'Candidate'} has ${experience} years of experience with ${skills.length} listed skills. ${strengths.length > weaknesses.length ? 'Profile appears strong overall.' : 'Profile could be more complete.'}`
         : `Your profile shows ${experience} years of experience. ${strengths.length > weaknesses.length ? 'You have a solid foundation — keep building!' : 'A few improvements would significantly boost your visibility.'}`;
 
+    const ats_score = Math.min(95, Math.max(30,
+        (skills.length >= 5 ? 20 : skills.length * 4) +
+        (experience >= 3 ? 25 : experience * 8) +
+        (workExp.length >= 2 ? 20 : workExp.length * 10) +
+        (education.length > 0 ? 15 : 0) +
+        (profile.resume_url ? 10 : 0) +
+        ((profile.about || profile.bio) ? 10 : 0)
+    ));
+
     return {
         strengths: strengths.slice(0, 4),
         weaknesses: weaknesses.slice(0, 4),
         suggestions: suggestions.slice(0, 4),
         overall_summary,
+        ats_score,
         hire_recommendation: viewerRole === 'employer'
             ? (strengths.length >= 4 ? 'Hire' : strengths.length >= 2 ? 'Maybe' : 'Pass')
             : undefined,

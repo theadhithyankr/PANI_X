@@ -172,7 +172,7 @@ export default function EmployerJobs() {
             <div className="flex flex-col gap-6">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
+                    <div className="hidden md:block">
                         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Jobs</h1>
                         <p className="text-muted-foreground mt-1 text-sm sm:text-base">Manage your job postings and find the perfect candidate.</p>
                     </div>

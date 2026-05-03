@@ -113,7 +113,7 @@ export default function EmployerCandidates() {
             <div className="flex flex-col gap-5">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <div>
+                    <div className="hidden md:block">
                         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Candidates</h1>
                         <p className="text-muted-foreground mt-0.5 text-sm">Top talent matched for your open roles.</p>
                     </div>
