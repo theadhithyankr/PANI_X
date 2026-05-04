@@ -276,20 +276,10 @@ graph LR
         CampInvitations[Campaign Invitations]
     end
 
-    subgraph "Admin Routes"
-        AdminDash[Dashboard]
-        AdminUsers[Users]
-        AdminJobs[Jobs]
-        AdminAnalytics[Analytics]
-        AdminSettings[Settings]
-        AdminSecurity[Security]
-    end
-
     Landing --> SignIn
     Landing --> SignUp
     SignIn --> CandDash
     SignIn --> EmpDash
-    SignIn --> AdminDash
 ```
 
 ---
@@ -715,11 +705,7 @@ pani-vite/
 - **Analytics Dashboard**: Track hiring metrics and pipeline status
 
 ### For Admins
-- **User Management**: Manage all users and roles
-- **Job Moderation**: Oversee all job postings
-- **Analytics**: System-wide analytics and insights
-- **Security Settings**: Configure security policies
-- **System Settings**: Manage platform configuration
+*Note: Admin panel is planned for future releases*
 
 ---
 
