@@ -370,13 +370,16 @@ export function useCandidates() {
                     best_job_title: bestJobTitle,
                     skills: p.skills || [],
                     location: p.location || 'Remote',
-                    experience: p.experience_years || 0,
+                    // Only trust experience_years when actual work history entries exist
+                    experience: (Array.isArray(p.experience) && p.experience.length > 0) || (Array.isArray(p.work_experience) && p.work_experience.length > 0)
+                        ? (p.experience_years || 0)
+                        : 0,
                     resume_url: p.resume_url,
                     avatar_url: p.avatar_url,
                     cover_url: p.cover_url,
                     email: p.email,
-                    bio: p.bio || p.summary,
-                    work_experience: p.work_experience || [],
+                    bio: p.about || p.bio || p.summary,
+                    work_experience: p.experience || p.work_experience || [],
                     education_history: p.education || p.education_history || [],
                     application_status: appStatusMap.get(p.id),
                     hired_job_title: hiredJobMap.get(p.id),

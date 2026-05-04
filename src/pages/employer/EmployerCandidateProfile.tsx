@@ -119,7 +119,9 @@ Application Status: ${candidate.application_status || 'Not applied'}`,
                                 <div className="flex flex-wrap gap-4 mt-2 text-xs text-muted-foreground">
                                     <span className="flex items-center gap-1"><MapPin className="h-3 w-3" />{candidate.location || 'Remote'}</span>
                                     {candidate.email && <span className="flex items-center gap-1"><Mail className="h-3 w-3" />{candidate.email}</span>}
-                                    <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{candidate.experience} yrs exp</span>
+                                    {candidate.experience > 0 && (
+                                        <span className="flex items-center gap-1"><Briefcase className="h-3 w-3" />{candidate.experience} yrs exp</span>
+                                    )}
                                 </div>
                             </div>
                             <div className="flex flex-col items-start sm:items-end gap-2 shrink-0">

@@ -49,44 +49,100 @@ export async function generateJobDescription(prompt: string) {
 }
 
 export async function parseResume(resumeText: string) {
-    const systemInstruction = `You are an expert Resume Parser. Extract a structured profile from the resume text below.
-    Return ONLY raw JSON. No markdown.
-    Structure:
-    {
-        "headline": "Professional Headline",
-        "about": "Professional summary",
-        "skills": ["Skill1", "Skill2"],
-        "experience_years": 5 (integer),
-        "location": "City, Country",
-        "experience": [
-            { "id": "1", "title": "Job Title", "company": "Company Name", "start_date": "Jan 2020", "end_date": "Present", "description": "Key responsibilities..." }
-        ],
-        "education": [
-            { "id": "1", "school": "University Name", "degree": "Degree Name", "field": "Field of Study", "start_year": "2018", "end_year": "2022" }
-        ]
-    }`;
+    const systemInstruction = `You are an expert Resume Parser. Extract a structured profile from the resume text.
+Return ONLY raw JSON. No markdown, no explanation.
+
+CRITICAL SEPARATION RULES — follow exactly:
+1. "experience" = WORK HISTORY ONLY: jobs, internships, freelance, part-time roles at companies/startups/organizations. Each entry MUST have a company/employer name and a job title. Do NOT include schools, universities, or colleges here.
+2. "education" = ACADEMIC HISTORY ONLY: universities, colleges, schools, bootcamps, certifications. Each entry MUST have a school/institution name and a degree or program. Do NOT include employers or job titles here.
+3. "experience_years" = total years of professional WORK experience only (do not count student years; internships count as 0.5 per year).
+
+JSON structure (follow field names exactly):
+{
+  "headline": "Professional Headline based on most recent job",
+  "about": "2-3 sentence professional summary",
+  "skills": ["Skill1", "Skill2"],
+  "experience_years": 3,
+  "location": "City, Country",
+  "experience": [
+    { "id": "1", "title": "Software Engineer", "company": "Acme Corp", "start_date": "Jan 2022", "end_date": "Present", "description": "Key responsibilities and achievements" }
+  ],
+  "education": [
+    { "id": "1", "school": "MIT", "degree": "B.Tech", "field": "Computer Science", "start_year": "2018", "end_year": "2022" }
+  ]
+}`;
 
     const fullPrompt = `${systemInstruction}\n\nResume Text:\n${resumeText.substring(0, 3000)}`;
 
     try {
-        const text = await getGemmaCompletion(fullPrompt, {
-            jsonMode: true,
-            task: 'resume_parse'
-        });
+        const text = await getGemmaCompletion(fullPrompt, { jsonMode: true, task: 'resume_parse' });
         const jsonStr = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(jsonStr);
+        const parsed = JSON.parse(jsonStr);
+        return sanitizeResumeParseResult(parsed);
     } catch (error) {
         console.error("Resume Parsing Failed:", error);
         return {
             headline: "Candidate (AI Parse Failed)",
             about: "Could not auto-generate bio. Please fill manually.",
-            skills: ["Skill A", "Skill B"],
-            experience_years: 1,
-            location: "Unknown",
+            skills: [],
+            experience_years: 0,
+            location: "",
             experience: [],
-            education: []
+            education: [],
         };
     }
+}
+
+const EDU_KEYWORDS = ['university', 'college', 'school', 'institute', 'academy', 'polytechnic', 'iit', 'nit', 'bits', 'mit', 'stanford', 'btech', 'b.tech', 'bachelor', 'master', 'mba', 'phd'];
+const WORK_KEYWORDS = ['inc', 'ltd', 'llc', 'corp', 'pvt', 'technologies', 'solutions', 'software', 'systems', 'services', 'labs', 'studio', 'agency', 'startup', 'consulting'];
+
+function looksLikeSchool(name: string): boolean {
+    const lower = (name || '').toLowerCase();
+    return EDU_KEYWORDS.some(k => lower.includes(k));
+}
+
+function looksLikeCompany(name: string): boolean {
+    const lower = (name || '').toLowerCase();
+    return WORK_KEYWORDS.some(k => lower.includes(k));
+}
+
+function sanitizeResumeParseResult(parsed: any) {
+    const experience: any[] = [];
+    const education: any[] = [];
+
+    for (const item of (parsed.experience || [])) {
+        // If AI put a school in the experience array, move it to education
+        if (looksLikeSchool(item.company) && !looksLikeCompany(item.company)) {
+            education.push({
+                id: item.id,
+                school: item.company,
+                degree: item.title,
+                field: item.description?.substring(0, 60) || '',
+                start_year: item.start_date?.replace(/[^0-9]/g, '').substring(0, 4) || '',
+                end_year: item.end_date?.replace(/[^0-9]/g, '').substring(0, 4) || '',
+            });
+        } else {
+            experience.push(item);
+        }
+    }
+
+    for (const item of (parsed.education || [])) {
+        // If AI put a job in the education array, move it to experience
+        if (looksLikeCompany(item.school) && !looksLikeSchool(item.school)) {
+            experience.push({
+                id: item.id,
+                title: item.degree || item.field || 'Role',
+                company: item.school,
+                start_date: item.start_year || '',
+                end_date: item.end_year || '',
+                description: '',
+            });
+        } else {
+            education.push(item);
+        }
+    }
+
+    return { ...parsed, experience, education };
 }
 
 const SKILL_CASING: Record<string, string> = {
@@ -169,7 +225,15 @@ export function calculateJobMatch(job: any, profile: any) {
         'entry level': 0, 'junior': 1, 'mid-level': 3, 'senior': 5, 'lead': 7
     };
     const jobExp = levelMap[job.experience_level?.toLowerCase()] || 2;
-    const userExp = profile.experience_years || 0;
+    // Only trust experience_years when actual work history entries exist.
+    // Check both column names — profile page saves as 'experience', legacy uses 'work_experience'.
+    const workHistoryArr = Array.isArray(profile.work_experience) ? profile.work_experience
+        : Array.isArray(profile.experience) ? profile.experience : null;
+    const hasConfirmedWorkHistory = workHistoryArr !== null && workHistoryArr.length > 0;
+    const storedExp: number =
+        typeof profile.experience_years === 'number' ? profile.experience_years :
+        typeof profile.experience === 'number' ? profile.experience : 0;
+    const userExp = hasConfirmedWorkHistory ? storedExp : 0;
 
     if (userExp >= jobExp) {
         score += 20;
