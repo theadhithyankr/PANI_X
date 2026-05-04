@@ -368,7 +368,7 @@ export default function CandidateCampaigns() {
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
     useEffect(() => {
-        getCampaigns({ status: 'active', visibility: 'public' });
+        getCampaigns({ status: 'active' });
         if (user?.id) {
             getInvitations({ candidate_id: user.id });
             getApplications({ candidate_id: user.id });
@@ -381,15 +381,10 @@ export default function CandidateCampaigns() {
             .map(inv => inv.campaign_id)
     );
 
-    const inviteOnlyCampaigns = invitations
-        .filter(inv => inv.campaign_id && inv.campaign?.visibility === 'invite-only')
-        .map(inv => inv.campaign)
-        .filter(Boolean) as Campaign[];
-
-    const allCampaigns = [
-        ...campaigns,
-        ...inviteOnlyCampaigns.filter(ic => !campaigns.find(c => c.id === ic.id)),
-    ];
+    // Show public campaigns to everyone; show invite-only only to invited candidates
+    const allCampaigns = campaigns.filter(c =>
+        c.visibility === 'public' || invitedCampaignIds.has(c.id)
+    );
 
     const appliedCampaignIds = new Set(applications.map(a => a.campaign_id));
 

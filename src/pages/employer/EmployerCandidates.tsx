@@ -257,8 +257,14 @@ export default function EmployerCandidates() {
                                     <CardContent className="p-5 flex flex-col flex-1">
                                         {/* Header */}
                                         <div className="flex items-center gap-3 mb-3">
-                                            <div className="h-12 w-12 rounded-2xl bg-violet-400/10 flex items-center justify-center text-violet-400 font-bold text-lg shrink-0">
-                                                {candidate.full_name?.[0]}
+                                            <div className="h-12 w-12 rounded-2xl overflow-hidden shrink-0">
+                                                {candidate.avatar_url ? (
+                                                    <img src={candidate.avatar_url} alt={candidate.full_name} className="h-full w-full object-cover" />
+                                                ) : (
+                                                    <div className="h-full w-full bg-violet-400/10 flex items-center justify-center text-violet-400 font-bold text-lg">
+                                                        {candidate.full_name?.[0]}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="min-w-0 flex-1">
                                                 <p className="font-semibold text-foreground truncate">{candidate.full_name}</p>

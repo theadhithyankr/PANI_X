@@ -1,11 +1,12 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, ClipboardList, Sparkles } from 'lucide-react';
+import { LayoutDashboard, Briefcase, ClipboardList, Calendar, User } from 'lucide-react';
 
 const TABS = [
     { text: 'Overview',     icon: LayoutDashboard, path: '/candidate' },
     { text: 'Find Jobs',    icon: Briefcase,       path: '/jobs' },
+    { text: 'Campaigns',    icon: Calendar,        path: '/campaigns' },
     { text: 'Applications', icon: ClipboardList,   path: '/applications' },
-    { text: 'AI Chat',      icon: Sparkles,        path: '/candidate/ai-chat' },
+    { text: 'Profile',      icon: User,            path: '/profile' },
 ];
 
 export default function MobileBottomNav() {

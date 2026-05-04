@@ -11,11 +11,13 @@ const PAGE_NAMES: Record<string, string> = {
     '/jobs': 'Find Jobs',
     '/inbox': 'Inbox',
     '/applications': 'Applications',
+    '/campaigns': 'Campaigns',
     '/profile': 'Profile',
 };
 
 function getPageName(pathname: string) {
     if (pathname.startsWith('/applications/')) return 'Application';
+    if (pathname.startsWith('/campaigns')) return 'Campaigns';
     return PAGE_NAMES[pathname] || 'Pani';
 }
 

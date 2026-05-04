@@ -224,8 +224,14 @@ export default function ApplicationModal({ open, onClose, job, profile, onConfir
                     {tab === 2 && (
                         <div className="flex flex-col gap-4">
                             <div className="flex items-center gap-3">
-                                <div className="h-14 w-14 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-2xl">
-                                    {profile?.full_name?.charAt(0)}
+                                <div className="h-14 w-14 rounded-full overflow-hidden ring-2 ring-violet-500/20">
+                                    {profile?.avatar_url ? (
+                                        <img src={profile.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+                                    ) : (
+                                        <div className="h-full w-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-2xl">
+                                            {profile?.full_name?.charAt(0)}
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <p className="font-semibold text-foreground">{profile?.full_name}</p>

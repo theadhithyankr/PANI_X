@@ -115,8 +115,14 @@ export default function SideMenu({ collapsed = false, onToggle, mobileDrawer = f
             <div className={cn('shrink-0 border-t border-border/60', collapsed ? 'p-2' : 'p-4')}>
                 {collapsed ? (
                     <div className="flex flex-col items-center gap-2">
-                        <div className="h-8 w-8 shrink-0 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-sm">
-                            {profile?.full_name?.charAt(0).toUpperCase() || 'C'}
+                        <div className="h-8 w-8 shrink-0 rounded-full overflow-hidden ring-2 ring-violet-500/20">
+                            {profile?.avatar_url ? (
+                                <img src={profile.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-sm">
+                                    {profile?.full_name?.charAt(0).toUpperCase() || 'C'}
+                                </div>
+                            )}
                         </div>
                         <button
                             onClick={toggleTheme}
@@ -135,8 +141,14 @@ export default function SideMenu({ collapsed = false, onToggle, mobileDrawer = f
                     </div>
                 ) : (
                     <div className="flex items-center gap-3 px-1">
-                        <div className="h-9 w-9 shrink-0 rounded-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-sm">
-                            {profile?.full_name?.charAt(0).toUpperCase() || 'C'}
+                        <div className="h-9 w-9 shrink-0 rounded-full overflow-hidden ring-2 ring-violet-500/20">
+                            {profile?.avatar_url ? (
+                                <img src={profile.avatar_url} alt="Profile" className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full bg-violet-500/20 flex items-center justify-center text-violet-400 font-bold text-sm">
+                                    {profile?.full_name?.charAt(0).toUpperCase() || 'C'}
+                                </div>
+                            )}
                         </div>
                         <div className="flex flex-col flex-1 overflow-hidden">
                             <span className="truncate text-sm font-semibold text-foreground">

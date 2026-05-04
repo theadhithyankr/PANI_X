@@ -72,8 +72,14 @@ export default function EmployerAppNavbar() {
                             {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
                         </button>
 
-                        <div className="h-8 w-8 rounded-full bg-violet-500/15 flex items-center justify-center text-violet-400 font-bold text-xs ring-2 ring-violet-500/20">
-                            {profile?.company_name?.charAt(0).toUpperCase() || profile?.full_name?.charAt(0).toUpperCase() || 'E'}
+                        <div className="h-8 w-8 rounded-full overflow-hidden ring-2 ring-violet-500/20">
+                            {profile?.logo_url || profile?.avatar_url ? (
+                                <img src={profile.logo_url || profile.avatar_url} alt="Company" className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full bg-violet-500/15 flex items-center justify-center text-violet-400 font-bold text-xs">
+                                    {profile?.company_name?.charAt(0).toUpperCase() || profile?.full_name?.charAt(0).toUpperCase() || 'E'}
+                                </div>
+                            )}
                         </div>
 
                         <button

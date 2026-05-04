@@ -3,8 +3,8 @@
 ## System Architecture (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph TB
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart TB
     User([👤 User])
     
     subgraph Frontend["Frontend (React + TypeScript)"]
@@ -55,8 +55,8 @@ graph TB
 ## Application Block Diagram (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph TB
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart TB
     Start([User Visits App])
     
     Auth{Authenticated?}
@@ -125,8 +125,8 @@ graph TB
 ## Technology Stack (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph LR
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart LR
     subgraph Frontend["Frontend Stack"]
         React[React 18<br/>TypeScript 5]
         Vite[Vite 5<br/>Build Tool]
@@ -242,8 +242,8 @@ erDiagram
 ## Job Application Flow (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph LR
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart LR
     A[Candidate<br/>Browses Jobs]
     B[AI Calculates<br/>Match Score]
     C[Candidate<br/>Applies]
@@ -273,8 +273,8 @@ graph LR
 ## Campaign System Flow (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph TB
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart TB
     A[Employer Creates<br/>Campaign]
     B[Build Multi-Round<br/>Pipeline]
     C[Activate<br/>Campaign]
@@ -307,8 +307,8 @@ graph TB
 ## AI Features Overview (Presentation Version)
 
 ```mermaid
-%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}}}%%
-graph TB
+%%{init: {'theme':'base', 'themeVariables': { 'fontSize':'18px', 'fontFamily':'arial'}, 'flowchart': {'curve': 'linear'}}}%%
+flowchart TB
     AI[AI Services<br/>Groq + HuggingFace]
     
     subgraph Candidate["For Candidates"]
