@@ -411,7 +411,7 @@ export default function EmployerCampaignDashboard() {
                                 />
                             </div>
                             <Select value={roundFilter} onValueChange={setRoundFilter}>
-                                <SelectTrigger className="w-44">
+                                <SelectTrigger className="w-full sm:w-44">
                                     <SelectValue placeholder="All Rounds" />
                                 </SelectTrigger>
                                 <SelectContent>

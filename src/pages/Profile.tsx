@@ -792,7 +792,7 @@ export default function Profile() {
                     <textarea rows={4} value={editForm.about || ''} onChange={e => setEditForm({ ...editForm, about: e.target.value })}
                         className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground" />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Phone">
                         <Input value={editForm.phone || ''} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
                     </FieldGroup>
@@ -818,7 +818,7 @@ export default function Profile() {
                 <FieldGroup label="Company">
                     <Input value={currentExp.company || ''} onChange={e => setCurrentExp({ ...currentExp, company: e.target.value })} />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Start Date">
                         <Input placeholder="e.g. Jan 2022" value={currentExp.start_date || ''} onChange={e => setCurrentExp({ ...currentExp, start_date: e.target.value })} />
                     </FieldGroup>
@@ -845,7 +845,7 @@ export default function Profile() {
                 <FieldGroup label="Field of Study">
                     <Input value={currentEdu.field || ''} onChange={e => setCurrentEdu({ ...currentEdu, field: e.target.value })} />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Start Year">
                         <Input placeholder="e.g. 2019" value={currentEdu.start_year || ''} onChange={e => setCurrentEdu({ ...currentEdu, start_year: e.target.value })} />
                     </FieldGroup>
