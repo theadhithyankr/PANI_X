@@ -38,8 +38,6 @@ export default function EmployerApplications() {
     const PAGE_SIZE = 15;
     const { setPageContext, clearPageContext } = usePageContext();
 
-    const toast = useToast();
-
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
         return applications.filter(a =>

@@ -6,7 +6,7 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 import {
     LayoutDashboard, Briefcase, Mail, ClipboardList, User, LogOut, Sparkles,
-    ChevronLeft, ChevronRight, Moon, Sun,
+    ChevronLeft, ChevronRight, Moon, Sun, Calendar,
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -16,6 +16,7 @@ const ALL_ITEMS = [
     { text: 'Find Jobs', icon: Briefcase, path: '/jobs' },
     { text: 'Inbox', icon: Mail, path: '/inbox', badge: true },
     { text: 'Applications', icon: ClipboardList, path: '/applications' },
+    { text: 'Campaigns', icon: Calendar, path: '/campaigns' },
     { text: 'Profile', icon: User, path: '/profile' },
 ];
 

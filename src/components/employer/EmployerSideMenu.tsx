@@ -11,6 +11,7 @@ import {
     ChevronRight,
     Moon,
     Sun,
+    Calendar,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useProfile } from '../../hooks/useSupabase';
@@ -20,20 +21,21 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 
 const ALL_ITEMS = [
-    { text: 'Dashboard',    icon: LayoutDashboard, path: '/employer' },
-    { text: 'AI Chat',      icon: Sparkles,        path: '/employer/ai-chat' },
-    { text: 'My Jobs',      icon: Briefcase,       path: '/employer/jobs' },
-    { text: 'Applications', icon: FileText,        path: '/employer/applications' },
-    { text: 'Candidates',   icon: Users,           path: '/employer/candidates' },
-    { text: 'Interviews',   icon: CalendarCheck,   path: '/employer/interviews' },
-    { text: 'Company',      icon: Building2,       path: '/employer/company' },
+    { text: 'Dashboard', icon: LayoutDashboard, path: '/employer' },
+    { text: 'AI Chat', icon: Sparkles, path: '/employer/ai-chat' },
+    { text: 'My Jobs', icon: Briefcase, path: '/employer/jobs' },
+    { text: 'Campaigns', icon: Calendar, path: '/employer/campaigns' },
+    { text: 'Applications', icon: FileText, path: '/employer/applications' },
+    { text: 'Candidates', icon: Users, path: '/employer/candidates' },
+    { text: 'Interviews', icon: CalendarCheck, path: '/employer/interviews' },
+    { text: 'Company', icon: Building2, path: '/employer/company' },
 ];
 
 // Secondary-only items shown in mobile drawer (primary ones are in bottom nav)
 const SECONDARY_ITEMS = [
-    { text: 'AI Chat',    icon: Sparkles,      path: '/employer/ai-chat' },
+    { text: 'AI Chat', icon: Sparkles, path: '/employer/ai-chat' },
     { text: 'Interviews', icon: CalendarCheck, path: '/employer/interviews' },
-    { text: 'Company',    icon: Building2,     path: '/employer/company' },
+    { text: 'Company', icon: Building2, path: '/employer/company' },
 ];
 
 interface Props {
