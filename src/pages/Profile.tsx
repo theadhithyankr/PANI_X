@@ -298,6 +298,12 @@ export default function Profile() {
     };
 
     const handleSaveExperience = async () => {
+        const currentYear = new Date().getFullYear();
+        const extractYear = (s: string) => { const m = s?.match(/\b(\d{4})\b/); return m ? parseInt(m[1], 10) : null; };
+        const startY = extractYear(currentExp.start_date || '');
+        const endY = extractYear(currentExp.end_date || '');
+        if (startY && startY > currentYear) { toast('Start date cannot be in the future.', 'error'); return; }
+        if (endY && endY > currentYear) { toast('End date cannot be in the future.', 'error'); return; }
         try {
             const list = [...(profile?.experience || [])];
             const idx = list.findIndex(e => e.id === currentExp.id);
@@ -313,6 +319,11 @@ export default function Profile() {
     };
 
     const handleSaveEducation = async () => {
+        const currentYear = new Date().getFullYear();
+        const startY = parseInt(currentEdu.start_year || '0', 10);
+        const endY = parseInt(currentEdu.end_year || '0', 10);
+        if (startY > currentYear) { toast('Start year cannot be in the future.', 'error'); return; }
+        if (endY > currentYear) { toast('End year cannot be in the future.', 'error'); return; }
         try {
             const list = [...(profile?.education || [])];
             const idx = list.findIndex(e => e.id === currentEdu.id);

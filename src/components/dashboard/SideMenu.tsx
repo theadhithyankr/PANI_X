@@ -1,5 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useProfile } from '../../hooks/useSupabase';
+import { useInboxContext } from '../../contexts/InboxContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
@@ -10,18 +11,18 @@ import {
 import { useAuth } from '../../contexts/AuthContext';
 
 const ALL_ITEMS = [
-    { text: 'Overview',     icon: LayoutDashboard, path: '/candidate' },
-    { text: 'AI Chat',      icon: Sparkles,        path: '/candidate/ai-chat' },
-    { text: 'Find Jobs',    icon: Briefcase,       path: '/jobs' },
-    { text: 'Inbox',        icon: Mail,            path: '/inbox',       badge: true },
-    { text: 'Applications', icon: ClipboardList,   path: '/applications' },
-    { text: 'Profile',      icon: User,            path: '/profile' },
+    { text: 'Overview', icon: LayoutDashboard, path: '/candidate' },
+    { text: 'AI Chat', icon: Sparkles, path: '/candidate/ai-chat' },
+    { text: 'Find Jobs', icon: Briefcase, path: '/jobs' },
+    { text: 'Inbox', icon: Mail, path: '/inbox', badge: true },
+    { text: 'Applications', icon: ClipboardList, path: '/applications' },
+    { text: 'Profile', icon: User, path: '/profile' },
 ];
 
 // Secondary-only items shown in mobile drawer (primary ones are in bottom nav)
 const SECONDARY_ITEMS = [
     { text: 'AI Chat', icon: Sparkles, path: '/candidate/ai-chat', badge: false },
-    { text: 'Inbox',   icon: Mail,     path: '/inbox',             badge: true },
+    { text: 'Inbox', icon: Mail, path: '/inbox', badge: true },
 ];
 
 interface Props {
@@ -34,6 +35,7 @@ export default function SideMenu({ collapsed = false, onToggle, mobileDrawer = f
     const navigate = useNavigate();
     const { pathname } = useLocation();
     const { profile } = useProfile();
+    const { unreadCount } = useInboxContext();
     const { signOut } = useAuth();
     const { theme, toggleTheme } = useTheme();
 
@@ -97,8 +99,10 @@ export default function SideMenu({ collapsed = false, onToggle, mobileDrawer = f
                                     isActive ? 'text-primary' : 'text-muted-foreground'
                                 )} />
                                 {!collapsed && text}
-                                {!collapsed && badge && (
-                                    <span className="ml-auto h-2 w-2 rounded-full bg-rose-500 shrink-0" />
+                                {!collapsed && badge && unreadCount > 0 && (
+                                    <span className="ml-auto inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold rounded-full bg-rose-500 text-white shrink-0">
+                                        {unreadCount > 99 ? '99+' : unreadCount}
+                                    </span>
                                 )}
                             </Button>
                         );

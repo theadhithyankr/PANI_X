@@ -2,6 +2,7 @@ import { useState, ReactNode } from 'react';
 import SideMenu from '../components/dashboard/SideMenu';
 import AppNavbar from '../components/dashboard/AppNavbar';
 import MobileBottomNav from '../components/dashboard/MobileBottomNav';
+import { InboxProvider } from '../contexts/InboxContext';
 
 interface DashboardLayoutProps {
     children: ReactNode;
@@ -22,6 +23,7 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     };
 
     return (
+        <InboxProvider>
         <div className="flex h-screen bg-background text-foreground overflow-hidden">
             {/* Persistent sidebar — desktop only */}
             <aside className={`hidden md:flex shrink-0 flex-col h-full bg-card border-r border-border/60 transition-all duration-200 ${
@@ -43,5 +45,6 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             {/* Mobile bottom navigation */}
             <MobileBottomNav />
         </div>
+        </InboxProvider>
     );
 }

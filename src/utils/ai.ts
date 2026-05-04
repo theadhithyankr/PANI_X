@@ -70,7 +70,8 @@ JSON structure (follow field names exactly):
   "education": [
     { "id": "1", "school": "MIT", "degree": "B.Tech", "field": "Computer Science", "start_year": "2018", "end_year": "2022" }
   ]
-}`;
+}
+IMPORTANT: Never use future years. All dates must be ${new Date().getFullYear()} or earlier. Do NOT invent or extrapolate years — use only what is explicitly written in the resume.`;
 
     const fullPrompt = `${systemInstruction}\n\nResume Text:\n${resumeText.substring(0, 3000)}`;
 
@@ -96,6 +97,23 @@ JSON structure (follow field names exactly):
 const EDU_KEYWORDS = ['university', 'college', 'school', 'institute', 'academy', 'polytechnic', 'iit', 'nit', 'bits', 'mit', 'stanford', 'btech', 'b.tech', 'bachelor', 'master', 'mba', 'phd'];
 const WORK_KEYWORDS = ['inc', 'ltd', 'llc', 'corp', 'pvt', 'technologies', 'solutions', 'software', 'systems', 'services', 'labs', 'studio', 'agency', 'startup', 'consulting'];
 
+const CURRENT_YEAR = new Date().getFullYear();
+
+function clampYear(yearStr: string): string {
+    if (!yearStr) return yearStr;
+    const y = parseInt(yearStr, 10);
+    if (isNaN(y)) return yearStr;
+    return y > CURRENT_YEAR ? String(CURRENT_YEAR) : yearStr;
+}
+
+function clampDateYear(dateStr: string): string {
+    if (!dateStr || dateStr.toLowerCase() === 'present') return dateStr;
+    return dateStr.replace(/\b(\d{4})\b/, (_, y) => {
+        const yr = parseInt(y, 10);
+        return yr > CURRENT_YEAR ? String(CURRENT_YEAR) : y;
+    });
+}
+
 function looksLikeSchool(name: string): boolean {
     const lower = (name || '').toLowerCase();
     return EDU_KEYWORDS.some(k => lower.includes(k));
@@ -118,11 +136,15 @@ function sanitizeResumeParseResult(parsed: any) {
                 school: item.company,
                 degree: item.title,
                 field: item.description?.substring(0, 60) || '',
-                start_year: item.start_date?.replace(/[^0-9]/g, '').substring(0, 4) || '',
-                end_year: item.end_date?.replace(/[^0-9]/g, '').substring(0, 4) || '',
+                start_year: clampYear(item.start_date?.replace(/[^0-9]/g, '').substring(0, 4) || ''),
+                end_year: clampYear(item.end_date?.replace(/[^0-9]/g, '').substring(0, 4) || ''),
             });
         } else {
-            experience.push(item);
+            experience.push({
+                ...item,
+                start_date: clampDateYear(item.start_date || ''),
+                end_date: clampDateYear(item.end_date || ''),
+            });
         }
     }
 
@@ -133,13 +155,22 @@ function sanitizeResumeParseResult(parsed: any) {
                 id: item.id,
                 title: item.degree || item.field || 'Role',
                 company: item.school,
-                start_date: item.start_year || '',
-                end_date: item.end_year || '',
+                start_date: clampDateYear(item.start_year || ''),
+                end_date: clampDateYear(item.end_year || ''),
                 description: '',
             });
         } else {
-            education.push(item);
+            education.push({
+                ...item,
+                start_year: clampYear(item.start_year || ''),
+                end_year: clampYear(item.end_year || ''),
+            });
         }
+    }
+
+    const maxExp = CURRENT_YEAR - 1960;
+    if (parsed.experience_years != null) {
+        parsed.experience_years = Math.min(parsed.experience_years, maxExp);
     }
 
     return { ...parsed, experience, education };

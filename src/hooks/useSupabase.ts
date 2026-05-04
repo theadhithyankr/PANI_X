@@ -142,10 +142,11 @@ export interface InboxItem {
     title: string;
     date: string;
     status: string;
+    isRead: boolean;
     action: string;
     icon: any;
     color: string;
-    senderId?: string; // ID of the user to chat with (Employer or Candidate)
+    senderId?: string;
     start_time?: string;
     end_time?: string;
 }
@@ -385,8 +386,8 @@ export function useCandidates() {
                     hired_job_title: hiredJobMap.get(p.id),
                 };
             })
-            // Sort by best match descending
-            .sort((a: Candidate, b: Candidate) => b.match_score - a.match_score);
+                // Sort by best match descending
+                .sort((a: Candidate, b: Candidate) => b.match_score - a.match_score);
             setCandidates(mappedCandidates);
         }
         setLoading(false);
@@ -591,6 +592,7 @@ export function useInterviews() {
 
 export function useInbox() {
     const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
     const fetchInbox = async () => {
@@ -607,7 +609,8 @@ export function useInbox() {
                 applications (jobs (title))
             `)
             .eq('candidate_id', user.id)
-            .eq('status', 'scheduled');
+            .eq('status', 'scheduled')
+            .neq('candidate_dismissed', true);
 
         // 2. Fetch Application Updates (as 'message' type) - e.g. status changed from pending
         const { data: applications } = await supabase
@@ -617,7 +620,8 @@ export function useInbox() {
                 jobs (title, employer_id, profiles (company_name))
             `)
             .eq('candidate_id', user.id)
-            .neq('status', 'pending'); // Only show if status has changed
+            .neq('status', 'pending')
+            .neq('candidate_dismissed', true);
 
         // 3. Fetch Direct Messages (Unread or recent)
         const { data: directMessages } = await supabase
@@ -627,12 +631,15 @@ export function useInbox() {
                 profiles!messages_sender_id_fkey (full_name, company_name)
             `)
             .eq('receiver_id', user.id)
+            .neq('candidate_dismissed', true)
             .order('created_at', { ascending: false });
 
         const items: InboxItem[] = [];
+        let unread = 0;
 
         if (interviews) {
             interviews.forEach((inv: any) => {
+                const isRead = inv.is_viewed ?? false;
                 items.push({
                     id: `inv-${inv.id}`,
                     type: 'interview',
@@ -640,55 +647,105 @@ export function useInbox() {
                     title: `Interview for ${inv.applications?.jobs?.title}`,
                     date: new Date(inv.start_time).toLocaleString(),
                     status: 'Scheduled',
+                    isRead,
                     action: 'Join Meeting',
-                    icon: null, // Component will handle
+                    icon: null,
                     color: 'primary',
                     senderId: inv.employer_id,
                     start_time: inv.start_time,
                     end_time: inv.end_time
                 });
+                if (!isRead) unread++;
             });
         }
 
         if (applications) {
             applications.forEach((app: any) => {
+                const isRead = app.is_viewed ?? false;
                 items.push({
                     id: `app-${app.id}`,
                     type: 'message',
                     company: app.jobs?.profiles?.company_name || 'Unknown',
                     title: `Application Status: ${app.status.toUpperCase()}`,
-                    date: new Date(app.created_at).toLocaleDateString(), // Ideally updated_at but created_at is fine for now
-                    status: 'Unread', // Check if we have read/unread logic later
+                    date: new Date(app.created_at).toLocaleDateString(),
+                    status: isRead ? 'Read' : 'Unread',
+                    isRead,
                     action: 'View Details',
                     icon: null,
                     color: 'info',
                     senderId: app.jobs?.employer_id
                 });
+                if (!isRead) unread++;
             });
         }
 
         if (directMessages) {
-            // Deduplicate by sender to show "threads" or just show all. 
-            // Simple: Show all unread, or latest from unique senders.
-            // Let's show all for now to be safe and visible.
             directMessages.forEach((msg: any) => {
+                const isRead = msg.is_read ?? false;
                 items.push({
                     id: `msg-${msg.id}`,
                     type: 'message',
                     company: msg.profiles?.company_name || msg.profiles?.full_name || 'Unknown',
                     title: msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : ''),
                     date: new Date(msg.created_at).toLocaleDateString(),
-                    status: msg.is_read ? 'Read' : 'Unread',
-                    action: 'Message', // This triggers the chat action in Inbox.tsx
+                    status: isRead ? 'Read' : 'Unread',
+                    isRead,
+                    action: 'Message',
                     icon: null,
                     color: 'success',
                     senderId: msg.sender_id
                 });
+                if (!isRead) unread++;
             });
         }
 
         setInboxItems(items);
+        setUnreadCount(unread);
         setLoading(false);
+    };
+
+    const markApplicationAsViewed = async (applicationId: string) => {
+        const { error } = await supabase
+            .from('applications')
+            .update({ is_viewed: true })
+            .eq('id', applicationId);
+
+        if (error) console.error('Error marking application as viewed:', error);
+        else fetchInbox();
+    };
+
+    const markDirectMessagesAsRead = async (senderId: string) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('receiver_id', user.id)
+            .eq('sender_id', senderId)
+            .eq('is_read', false);
+        fetchInbox();
+    };
+
+    const toggleItemRead = async (item: InboxItem, read: boolean) => {
+        if (item.id.startsWith('inv-')) {
+            await supabase.from('interviews').update({ is_viewed: read }).eq('id', item.id.replace('inv-', ''));
+        } else if (item.id.startsWith('msg-')) {
+            await supabase.from('messages').update({ is_read: read }).eq('id', item.id.replace('msg-', ''));
+        } else if (item.id.startsWith('app-')) {
+            await supabase.from('applications').update({ is_viewed: read }).eq('id', item.id.replace('app-', ''));
+        }
+        fetchInbox();
+    };
+
+    const deleteItem = async (item: InboxItem) => {
+        if (item.id.startsWith('inv-')) {
+            await supabase.from('interviews').update({ candidate_dismissed: true }).eq('id', item.id.replace('inv-', ''));
+        } else if (item.id.startsWith('msg-')) {
+            await supabase.from('messages').update({ candidate_dismissed: true }).eq('id', item.id.replace('msg-', ''));
+        } else if (item.id.startsWith('app-')) {
+            await supabase.from('applications').update({ candidate_dismissed: true }).eq('id', item.id.replace('app-', ''));
+        }
+        fetchInbox();
     };
 
     useEffect(() => {
@@ -709,7 +766,7 @@ export function useInbox() {
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    return { inboxItems, loading, fetchInbox };
+    return { inboxItems, unreadCount, loading, fetchInbox, markApplicationAsViewed, markDirectMessagesAsRead, toggleItemRead, deleteItem };
 }
 
 export function useDashboardStats() {
@@ -895,6 +952,9 @@ export function useMessages() {
         setCurrentUserId(user.id);
         await loadMessages(user.id, otherId);
 
+        // Mark all messages from the other user as read
+        await markMessagesAsRead(user.id, otherId);
+
         // Subscribe to real-time new messages
         const channel = supabase
             .channel(`messages:${[user.id, otherId].sort().join('-')}`)
@@ -904,6 +964,17 @@ export function useMessages() {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
+    };
+
+    const markMessagesAsRead = async (userId: string, senderId: string) => {
+        const { error } = await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('receiver_id', userId)
+            .eq('sender_id', senderId)
+            .eq('is_read', false);
+
+        if (error) console.error('Error marking messages as read:', error);
     };
 
     const sendMessage = async (receiverId: string, content: string) => {
@@ -918,5 +989,5 @@ export function useMessages() {
         if (currentUserId) await loadMessages(currentUserId, receiverId);
     };
 
-    return { messages, loading, fetchMessages, sendMessage };
+    return { messages, loading, fetchMessages, sendMessage, markMessagesAsRead };
 }
