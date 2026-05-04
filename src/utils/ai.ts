@@ -286,7 +286,8 @@ export function calculateJobMatch(job: any, profile: any) {
         const expLabel = userExp >= jobExp
             ? `Experience Met (${userExp} yrs)`
             : `Experience Close (${userExp}/${jobExp} yrs)`;
-        const expType = userExp >= jobExp ? 'success' : 'neutral';
+        // Show as neutral (not green) when relevance is too low to award any points
+        const expType = adjExpScore > 0 ? (userExp >= jobExp ? 'success' : 'neutral') : 'neutral';
         details.push({ label: expLabel, type: expType, score: `+${adjExpScore}%`, category: 'experience' });
     } else {
         details.push({ label: `Experience Gap (${userExp} vs ${jobExp} yrs)`, type: 'warning', score: '0%', category: 'experience' });
@@ -312,12 +313,14 @@ export function calculateJobMatch(job: any, profile: any) {
     if (rawLocationScore > 0) {
         const adjLocationScore = Math.round(rawLocationScore * relevanceFraction);
         score += adjLocationScore;
-        details.push({ label: locationLabel, type: 'success', score: `+${adjLocationScore}%`, category: 'location' });
+        // Show as neutral (not green) when relevance is too low to award any points
+        const locType = adjLocationScore > 0 ? 'success' : 'neutral';
+        details.push({ label: locationLabel, type: locType, score: `+${adjLocationScore}%`, category: 'location' });
     }
 
     if (titleMatches.length === 0 && score < 40) score = Math.min(score, 25);
     score = Math.min(98, Math.floor(score));
-    score = Math.max(10, score);
+    score = Math.max(0, score);
 
     return {
         score,
