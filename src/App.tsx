@@ -17,6 +17,11 @@ import EmployerInterviews from './pages/employer/EmployerInterviews';
 import EmployerCompany from './pages/employer/EmployerCompany';
 import EmployerApplications from './pages/employer/EmployerApplications';
 import EmployerAIChat from './pages/employer/EmployerAIChat';
+import EmployerCampaigns from './pages/employer/EmployerCampaigns';
+import EmployerCampaignDashboard from './pages/employer/EmployerCampaignDashboard';
+import EmployerCampaignInvitations from './pages/employer/EmployerCampaignInvitations';
+import CandidateCampaigns from './pages/CandidateCampaigns';
+import CandidateCampaignProgress from './pages/CandidateCampaignProgress';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import AdminUsers from './pages/admin/AdminUsers';
 import AdminJobs from './pages/admin/AdminJobs';
@@ -43,50 +48,55 @@ function PublicThemeToggle() {
 function App() {
     return (
         <ThemeProvider>
-        <ToastProvider>
-        <AuthProvider>
-        <PageContextProvider>
-            <>
-            <PublicThemeToggle />
-            <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<Landing />} />
-                <Route path="/signin" element={<SignIn />} />
-                <Route path="/signup" element={<SignUp />} />
-                <Route path="/reset-password" element={<ResetPassword />} />
+            <ToastProvider>
+                <AuthProvider>
+                    <PageContextProvider>
+                        <>
+                            <PublicThemeToggle />
+                            <Routes>
+                                {/* Public Routes */}
+                                <Route path="/" element={<Landing />} />
+                                <Route path="/signin" element={<SignIn />} />
+                                <Route path="/signup" element={<SignUp />} />
+                                <Route path="/reset-password" element={<ResetPassword />} />
 
-                {/* Candidate Routes */}
-                <Route path="/candidate" element={<AuthGuard requiredRole="candidate"><CandidateDashboard /></AuthGuard>} />
-                <Route path="/candidate/ai-chat" element={<AuthGuard requiredRole="candidate"><CandidateAIChat /></AuthGuard>} />
-                <Route path="/jobs" element={<AuthGuard requiredRole="candidate"><FindJobs /></AuthGuard>} />
-                <Route path="/profile" element={<AuthGuard requiredRole="candidate"><Profile /></AuthGuard>} />
-                <Route path="/inbox" element={<AuthGuard requiredRole="candidate"><Inbox /></AuthGuard>} />
-                <Route path="/applications" element={<AuthGuard requiredRole="candidate"><Applications /></AuthGuard>} />
-                <Route path="/applications/:id" element={<AuthGuard requiredRole="candidate"><ApplicationDetails /></AuthGuard>} />
+                                {/* Candidate Routes */}
+                                <Route path="/candidate" element={<AuthGuard requiredRole="candidate"><CandidateDashboard /></AuthGuard>} />
+                                <Route path="/candidate/ai-chat" element={<AuthGuard requiredRole="candidate"><CandidateAIChat /></AuthGuard>} />
+                                <Route path="/jobs" element={<AuthGuard requiredRole="candidate"><FindJobs /></AuthGuard>} />
+                                <Route path="/profile" element={<AuthGuard requiredRole="candidate"><Profile /></AuthGuard>} />
+                                <Route path="/inbox" element={<AuthGuard requiredRole="candidate"><Inbox /></AuthGuard>} />
+                                <Route path="/applications" element={<AuthGuard requiredRole="candidate"><Applications /></AuthGuard>} />
+                                <Route path="/applications/:id" element={<AuthGuard requiredRole="candidate"><ApplicationDetails /></AuthGuard>} />
+                                <Route path="/campaigns" element={<AuthGuard requiredRole="candidate"><CandidateCampaigns /></AuthGuard>} />
+                                <Route path="/campaigns/progress" element={<AuthGuard requiredRole="candidate"><CandidateCampaignProgress /></AuthGuard>} />
 
-                {/* Employer Routes */}
-                <Route path="/employer" element={<AuthGuard requiredRole="employer"><EmployerDashboard /></AuthGuard>} />
-                <Route path="/employer/ai-chat" element={<AuthGuard requiredRole="employer"><EmployerAIChat /></AuthGuard>} />
-                <Route path="/employer/jobs" element={<AuthGuard requiredRole="employer"><EmployerJobs /></AuthGuard>} />
-                <Route path="/employer/candidates" element={<AuthGuard requiredRole="employer"><EmployerCandidates /></AuthGuard>} />
-                <Route path="/employer/candidates/:id" element={<AuthGuard requiredRole="employer"><EmployerCandidateProfile /></AuthGuard>} />
-                <Route path="/employer/applications" element={<AuthGuard requiredRole="employer"><EmployerApplications /></AuthGuard>} />
-                <Route path="/employer/interviews" element={<AuthGuard requiredRole="employer"><EmployerInterviews /></AuthGuard>} />
-                <Route path="/employer/company" element={<AuthGuard requiredRole="employer"><EmployerCompany /></AuthGuard>} />
+                                {/* Employer Routes */}
+                                <Route path="/employer" element={<AuthGuard requiredRole="employer"><EmployerDashboard /></AuthGuard>} />
+                                <Route path="/employer/ai-chat" element={<AuthGuard requiredRole="employer"><EmployerAIChat /></AuthGuard>} />
+                                <Route path="/employer/jobs" element={<AuthGuard requiredRole="employer"><EmployerJobs /></AuthGuard>} />
+                                <Route path="/employer/campaigns" element={<AuthGuard requiredRole="employer"><EmployerCampaigns /></AuthGuard>} />
+                                <Route path="/employer/campaigns/:id" element={<AuthGuard requiredRole="employer"><EmployerCampaignDashboard /></AuthGuard>} />
+                                <Route path="/employer/campaigns/:id/invitations" element={<AuthGuard requiredRole="employer"><EmployerCampaignInvitations /></AuthGuard>} />
+                                <Route path="/employer/candidates" element={<AuthGuard requiredRole="employer"><EmployerCandidates /></AuthGuard>} />
+                                <Route path="/employer/candidates/:id" element={<AuthGuard requiredRole="employer"><EmployerCandidateProfile /></AuthGuard>} />
+                                <Route path="/employer/applications" element={<AuthGuard requiredRole="employer"><EmployerApplications /></AuthGuard>} />
+                                <Route path="/employer/interviews" element={<AuthGuard requiredRole="employer"><EmployerInterviews /></AuthGuard>} />
+                                <Route path="/employer/company" element={<AuthGuard requiredRole="employer"><EmployerCompany /></AuthGuard>} />
 
-                {/* Admin Routes */}
-                <Route path="/admin" element={<AuthGuard requiredRole="admin"><AdminDashboard /></AuthGuard>} />
-                <Route path="/admin/users" element={<AuthGuard requiredRole="admin"><AdminUsers /></AuthGuard>} />
-                <Route path="/admin/jobs" element={<AuthGuard requiredRole="admin"><AdminJobs /></AuthGuard>} />
-                <Route path="/admin/analytics" element={<AuthGuard requiredRole="admin"><AdminAnalytics /></AuthGuard>} />
-                <Route path="/admin/settings" element={<AuthGuard requiredRole="admin"><AdminSettings /></AuthGuard>} />
-                <Route path="/admin/security" element={<AuthGuard requiredRole="admin"><AdminSecurity /></AuthGuard>} />
-            </Routes>
-            <AIAssistant />
-            </>
-        </PageContextProvider>
-        </AuthProvider>
-        </ToastProvider>
+                                {/* Admin Routes */}
+                                <Route path="/admin" element={<AuthGuard requiredRole="admin"><AdminDashboard /></AuthGuard>} />
+                                <Route path="/admin/users" element={<AuthGuard requiredRole="admin"><AdminUsers /></AuthGuard>} />
+                                <Route path="/admin/jobs" element={<AuthGuard requiredRole="admin"><AdminJobs /></AuthGuard>} />
+                                <Route path="/admin/analytics" element={<AuthGuard requiredRole="admin"><AdminAnalytics /></AuthGuard>} />
+                                <Route path="/admin/settings" element={<AuthGuard requiredRole="admin"><AdminSettings /></AuthGuard>} />
+                                <Route path="/admin/security" element={<AuthGuard requiredRole="admin"><AdminSecurity /></AuthGuard>} />
+                            </Routes>
+                            <AIAssistant />
+                        </>
+                    </PageContextProvider>
+                </AuthProvider>
+            </ToastProvider>
         </ThemeProvider>
     );
 }

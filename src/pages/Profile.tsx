@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import DashboardLayout from '../layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -10,7 +10,7 @@ import {
     CheckCircle2, RefreshCw, GitMerge, Briefcase, GraduationCap, Code2, FileText,
     Camera, Save,
 } from 'lucide-react';
-import { useProfile, Profile as ProfileType, Experience, Education } from '../hooks/useSupabase';
+import { useProfile, useJobs, Profile as ProfileType, Experience, Education } from '../hooks/useSupabase';
 import { supabase } from '../utils/supabase/client';
 import { extractTextFromPDF } from '../utils/pdf';
 import { parseResume } from '../utils/ai';
@@ -99,6 +99,7 @@ async function uploadImage(bucket: string, path: string, file: File): Promise<st
 
 export default function Profile() {
     const { profile, loading, updateProfile } = useProfile();
+    const { jobs } = useJobs({ activeOnly: true });
     const toast = useToast();
 
     // Modal state
@@ -128,6 +129,38 @@ export default function Profile() {
     // Open to work
     const [togglingWork, setTogglingWork] = useState(false);
 
+    // Skills raw input (avoids comma-eating bug)
+    const [skillsRaw, setSkillsRaw] = useState('');
+
+    // Auto-sanitize any experience entries that have future dates already stored in DB
+    const sanitizedRef = useRef(false);
+    const clampDate = useCallback((dateStr: string | undefined) => {
+        if (!dateStr) return dateStr;
+        const lower = dateStr.toLowerCase().trim();
+        if (lower === 'present' || lower === '') return dateStr;
+        const today = new Date().getFullYear();
+        return dateStr.replace(/\b(\d{4})\b/, (_, y) => parseInt(y, 10) > today ? String(today) : y);
+    }, []);
+
+    useEffect(() => {
+        if (!profile || sanitizedRef.current) return;
+        sanitizedRef.current = true;
+        const today = new Date().getFullYear();
+        const hasFuture = (profile.experience || []).some(exp => {
+            const startY = exp.start_date?.match(/\b(\d{4})\b/)?.[1];
+            const endY = exp.end_date?.match(/\b(\d{4})\b/)?.[1];
+            return (startY && parseInt(startY) > today) || (endY && parseInt(endY) > today);
+        });
+        if (hasFuture) {
+            const cleaned = (profile.experience || []).map(exp => ({
+                ...exp,
+                start_date: clampDate(exp.start_date),
+                end_date: clampDate(exp.end_date),
+            }));
+            updateProfile({ experience: cleaned }).catch(() => {});
+        }
+    }, [profile?.id]);
+
     // Inline About editing
     const [editingAbout, setEditingAbout] = useState(false);
     const [aboutDraft, setAboutDraft] = useState('');
@@ -142,7 +175,13 @@ export default function Profile() {
 
     const success = (msg: string) => { setSuccessMessage(msg); setShowSuccess(true); };
 
-    const handleOpenEdit = () => { if (profile) { setEditForm(profile); setIsEditOpen(true); } };
+    const handleOpenEdit = () => {
+        if (profile) {
+            setEditForm(profile);
+            setSkillsRaw(Array.isArray(profile.skills) ? profile.skills.join(', ') : '');
+            setIsEditOpen(true);
+        }
+    };
 
     const toggleOpenToWork = async () => {
         if (!profile || togglingWork) return;
@@ -208,7 +247,10 @@ export default function Profile() {
 
     const handleSave = async () => {
         try {
-            await updateProfile(editForm);
+            await updateProfile({
+                ...editForm,
+                skills: skillsRaw.split(',').map(s => s.trim()).filter(Boolean),
+            });
             setIsEditOpen(false);
             success('Profile updated!');
         } catch { toast('Failed to update profile', 'error'); }
@@ -285,6 +327,18 @@ export default function Profile() {
     };
 
     const handleSaveExperience = async () => {
+        const currentYear = new Date().getFullYear();
+        const extractYear = (s: string) => { const m = s?.match(/\b(\d{4})\b/); return m ? parseInt(m[1], 10) : null; };
+        const startY = extractYear(currentExp.start_date || '');
+        const endY = extractYear(currentExp.end_date || '');
+        if (startY && startY > currentYear) {
+            toast(`Start date can't be a future year. Please enter ${currentYear} or earlier.`, 'error');
+            return;
+        }
+        if (endY && endY > currentYear) {
+            toast(`End date can't be a future year. Please enter ${currentYear} or earlier.`, 'error');
+            return;
+        }
         try {
             const list = [...(profile?.experience || [])];
             const idx = list.findIndex(e => e.id === currentExp.id);
@@ -300,6 +354,11 @@ export default function Profile() {
     };
 
     const handleSaveEducation = async () => {
+        const currentYear = new Date().getFullYear();
+        const startY = parseInt(currentEdu.start_year || '0', 10);
+        const endY = parseInt(currentEdu.end_year || '0', 10);
+        if (startY > currentYear) { toast('Start year cannot be in the future.', 'error'); return; }
+        if (endY > currentYear) { toast('End year cannot be in the future.', 'error'); return; }
         try {
             const list = [...(profile?.education || [])];
             const idx = list.findIndex(e => e.id === currentEdu.id);
@@ -720,18 +779,20 @@ export default function Profile() {
                     <Input value={editForm.location || ''} onChange={e => setEditForm({ ...editForm, location: e.target.value })} />
                 </FieldGroup>
                 <FieldGroup label="Experience (years)">
-                    <Input type="number" min={0} value={editForm.experience_years ?? ''} onChange={e => setEditForm({ ...editForm, experience_years: Number(e.target.value) })} />
+                    <Input type="number" min={0} value={editForm.experience_years ?? ''} onChange={e => setEditForm({ ...editForm, experience_years: e.target.value === '' ? undefined : Number(e.target.value) })} />
                 </FieldGroup>
                 <FieldGroup label="Skills (comma separated)">
-                    <Input placeholder="React, Node.js, Python"
-                        value={Array.isArray(editForm.skills) ? editForm.skills.join(', ') : (editForm.skills || '')}
-                        onChange={e => setEditForm({ ...editForm, skills: e.target.value.split(',').map(s => s.trim()).filter(Boolean) })} />
+                    <Input
+                        placeholder="React, Node.js, Python"
+                        value={skillsRaw}
+                        onChange={e => setSkillsRaw(e.target.value)}
+                    />
                 </FieldGroup>
                 <FieldGroup label="About">
                     <textarea rows={4} value={editForm.about || ''} onChange={e => setEditForm({ ...editForm, about: e.target.value })}
                         className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground" />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Phone">
                         <Input value={editForm.phone || ''} onChange={e => setEditForm({ ...editForm, phone: e.target.value })} />
                     </FieldGroup>
@@ -757,7 +818,7 @@ export default function Profile() {
                 <FieldGroup label="Company">
                     <Input value={currentExp.company || ''} onChange={e => setCurrentExp({ ...currentExp, company: e.target.value })} />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Start Date">
                         <Input placeholder="e.g. Jan 2022" value={currentExp.start_date || ''} onChange={e => setCurrentExp({ ...currentExp, start_date: e.target.value })} />
                     </FieldGroup>
@@ -784,7 +845,7 @@ export default function Profile() {
                 <FieldGroup label="Field of Study">
                     <Input value={currentEdu.field || ''} onChange={e => setCurrentEdu({ ...currentEdu, field: e.target.value })} />
                 </FieldGroup>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <FieldGroup label="Start Year">
                         <Input placeholder="e.g. 2019" value={currentEdu.start_year || ''} onChange={e => setCurrentEdu({ ...currentEdu, start_year: e.target.value })} />
                     </FieldGroup>
@@ -812,6 +873,7 @@ export default function Profile() {
                     candidateName={profile.full_name || 'My'}
                     profile={profile}
                     viewerRole="candidate"
+                    availableJobs={jobs}
                 />
             )}
         </DashboardLayout>

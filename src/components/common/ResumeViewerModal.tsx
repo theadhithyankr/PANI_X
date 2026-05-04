@@ -7,6 +7,17 @@ import {
 import { analyzeProfileStrengths, type ProfileAnalysis } from '../../utils/ai';
 import { extractTextFromUrl } from '../../utils/pdf';
 
+interface AvailableJob {
+    id?: string;
+    title?: string;
+    role?: string;
+    skills?: string[];
+    experience_level?: string;
+    work_mode?: string;
+    location?: string;
+    company_name?: string;
+}
+
 interface Props {
     open: boolean;
     onClose: () => void;
@@ -15,6 +26,7 @@ interface Props {
     profile: any;
     viewerRole: 'employer' | 'candidate';
     jobContext?: any;
+    availableJobs?: AvailableJob[];
 }
 
 const HIRE_COLORS: Record<string, string> = {
@@ -24,11 +36,12 @@ const HIRE_COLORS: Record<string, string> = {
     'Pass':        'text-rose-400 bg-rose-400/10 border-rose-400/30',
 };
 
-export default function ResumeViewerModal({ open, onClose, resumeUrl, candidateName, profile, viewerRole, jobContext }: Props) {
+export default function ResumeViewerModal({ open, onClose, resumeUrl, candidateName, profile, viewerRole, jobContext, availableJobs }: Props) {
     const [analysis, setAnalysis] = useState<ProfileAnalysis | null>(null);
     const [analyzing, setAnalyzing] = useState(false);
     const [showAnalysis, setShowAnalysis] = useState(false);
     const [targetJobTitle, setTargetJobTitle] = useState('');
+    const [selectedJobId, setSelectedJobId] = useState('');
     const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
 
     useEffect(() => {
@@ -41,24 +54,30 @@ export default function ResumeViewerModal({ open, onClose, resumeUrl, candidateN
         if (!open) {
             setAnalysis(null);
             setShowAnalysis(false);
+            setSelectedJobId('');
+            setTargetJobTitle('');
         }
     }, [open]);
+
+    const selectedJob = availableJobs?.find(j => j.id === selectedJobId) ?? null;
+    const activeJobContext = selectedJob ?? jobContext ?? null;
 
     const runAnalysis = async () => {
         setAnalyzing(true);
         setShowAnalysis(true);
-        
+
         try {
             let extractedText = '';
             try {
-                if (resumeUrl) {
-                    extractedText = await extractTextFromUrl(resumeUrl);
-                }
+                if (resumeUrl) extractedText = await extractTextFromUrl(resumeUrl);
             } catch (e) {
                 console.warn("Could not extract PDF text, falling back to profile metadata:", e);
             }
 
-            const result = await analyzeProfileStrengths(profile, viewerRole, jobContext, extractedText, targetJobTitle);
+            const result = await analyzeProfileStrengths(
+                profile, viewerRole, activeJobContext, extractedText,
+                !activeJobContext ? targetJobTitle : undefined
+            );
             setAnalysis(result);
         } catch {
             setAnalysis(null);
@@ -163,23 +182,39 @@ export default function ResumeViewerModal({ open, onClose, resumeUrl, candidateN
                                         </button>
                                     </div>
                                 </div>
-                                {viewerRole === 'candidate' && (
+                                {(viewerRole === 'candidate' || (viewerRole === 'employer' && availableJobs?.length)) && (
                                     <div className="mt-3 flex items-center gap-2 px-1">
-                                        <input 
-                                            type="text" 
-                                            placeholder="What job are you looking for? (e.g. Senior Frontend Engineer)"
-                                            value={targetJobTitle}
-                                            onChange={e => setTargetJobTitle(e.target.value)}
-                                            className="flex-1 h-8 px-3 rounded-lg border border-border bg-background text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
-                                            disabled={analyzing}
-                                        />
-                                        <Button 
-                                            size="sm" 
-                                            onClick={runAnalysis} 
-                                            disabled={analyzing || !targetJobTitle}
+                                        {availableJobs?.length ? (
+                                            <select
+                                                value={selectedJobId}
+                                                onChange={e => setSelectedJobId(e.target.value)}
+                                                className="flex-1 h-8 px-2 rounded-lg border border-border bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                                disabled={analyzing}
+                                            >
+                                                <option value="">— Select a job to target —</option>
+                                                {availableJobs.map((j, i) => (
+                                                    <option key={j.id ?? i} value={j.id ?? ''}>
+                                                        {j.title || j.role}{j.company_name ? ` · ${j.company_name}` : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        ) : (
+                                            <input
+                                                type="text"
+                                                placeholder="What job are you looking for? e.g. Senior Frontend Engineer"
+                                                value={targetJobTitle}
+                                                onChange={e => setTargetJobTitle(e.target.value)}
+                                                className="flex-1 h-8 px-3 rounded-lg border border-border bg-background text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-violet-500"
+                                                disabled={analyzing}
+                                            />
+                                        )}
+                                        <Button
+                                            size="sm"
+                                            onClick={runAnalysis}
+                                            disabled={analyzing || (!selectedJobId && !targetJobTitle && !jobContext)}
                                             className="h-8 text-xs rounded-lg whitespace-nowrap"
                                         >
-                                            Target
+                                            Analyze
                                         </Button>
                                     </div>
                                 )}

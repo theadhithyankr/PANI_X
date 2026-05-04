@@ -172,7 +172,7 @@ export default function EmployerJobs() {
             <div className="flex flex-col gap-6">
                 {/* Header */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div>
+                    <div className="hidden md:block">
                         <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Jobs</h1>
                         <p className="text-muted-foreground mt-1 text-sm sm:text-base">Manage your job postings and find the perfect candidate.</p>
                     </div>
@@ -373,7 +373,7 @@ export default function EmployerJobs() {
                     </div>
                     <div className="space-y-2">
                         <Label>Number of Openings</Label>
-                        <Input type="number" value={jobData.openings} onChange={(e) => setJobData({ ...jobData, openings: Number(e.target.value) })} />
+                        <Input type="number" value={jobData.openings || ''} onChange={(e) => setJobData({ ...jobData, openings: e.target.value === '' ? 0 : Number(e.target.value) })} />
                     </div>
                     <div className="md:col-span-2">
                         <label className="flex items-start gap-3 cursor-pointer group">

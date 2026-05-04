@@ -2,9 +2,12 @@ import { useState } from 'react';
 import DashboardLayout from '../layout/DashboardLayout';
 import { Card, CardContent } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Video, FileText, Mail, CheckCircle2, Clock, Loader2, CalendarPlus } from 'lucide-react';
+import {
+    Video, FileText, Mail, CheckCircle2, Clock, Loader2,
+    CalendarPlus, MailOpen, Trash2
+} from 'lucide-react';
 import ChatInterface from '../components/ChatInterface';
-import { useInbox } from '../hooks/useSupabase';
+import { useInboxContext } from '../contexts/InboxContext';
 
 const TABS = ['All', 'Interviews', 'Messages'];
 
@@ -16,8 +19,8 @@ function getItemStyle(item: any) {
     return { bg: 'bg-blue-400/10', color: 'text-blue-400', Icon: Mail };
 }
 
-export default function Inbox() {
-    const { inboxItems, loading } = useInbox();
+function InboxContent() {
+    const { inboxItems, loading, markApplicationAsViewed, markDirectMessagesAsRead, toggleItemRead, deleteItem } = useInboxContext();
     const [tab, setTab] = useState(0);
     const [openChat, setOpenChat] = useState(false);
     const [chatTarget, setChatTarget] = useState<{ id: string; name: string } | null>(null);
@@ -25,14 +28,17 @@ export default function Inbox() {
     const interviewCount = inboxItems.filter(i => i.type === 'interview').length;
 
     const displayed = inboxItems.filter(item => {
-        if (tab === 0) return true;
         if (tab === 1) return item.type === 'interview';
         if (tab === 2) return item.type === 'message';
         return true;
     });
 
     const handleAction = (item: any) => {
+        if (item.id.startsWith('app-') && !item.isRead) {
+            markApplicationAsViewed(item.id.replace('app-', ''));
+        }
         if ((item.type === 'message' || item.action === 'Message') && item.senderId) {
+            if (!item.isRead) markDirectMessagesAsRead(item.senderId);
             setChatTarget({ id: item.senderId, name: item.company });
             setOpenChat(true);
         }
@@ -40,23 +46,14 @@ export default function Inbox() {
 
     const generateGoogleCalendarUrl = (item: any) => {
         const title = encodeURIComponent(item.title);
-        
-        // Format to YYYYMMDDTHHmmssZ
-        const formatDate = (dateString: string) => {
-            if (!dateString) return '';
-            const date = new Date(dateString);
-            return date.toISOString().replace(/-|:|\.\d\d\d/g, '');
-        };
-
-        const start = formatDate(item.start_time);
-        const end = formatDate(item.end_time || new Date(new Date(item.start_time).getTime() + 60*60*1000).toISOString());
-        const details = encodeURIComponent(`Interview with ${item.company} via Pani AI.`);
-
-        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${details}`;
+        const fmt = (d: string) => d ? new Date(d).toISOString().replace(/-|:|\.\d\d\d/g, '') : '';
+        const start = fmt(item.start_time);
+        const end = fmt(item.end_time || new Date(new Date(item.start_time).getTime() + 3600000).toISOString());
+        return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${start}/${end}&details=${encodeURIComponent(`Interview with ${item.company} via Pani AI.`)}`;
     };
 
     return (
-        <DashboardLayout>
+        <>
             <div className="flex flex-col gap-6">
                 <div className="hidden md:block">
                     <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Inbox</h1>
@@ -64,7 +61,6 @@ export default function Inbox() {
                 </div>
 
                 <Card className="bg-card border-border/60 min-h-[500px]">
-                    {/* Tabs */}
                     <div className="flex border-b border-border/60 px-4">
                         {TABS.map((label, idx) => (
                             <button
@@ -93,16 +89,15 @@ export default function Inbox() {
                             <ul className="divide-y divide-border/50">
                                 {displayed.map((item) => {
                                     const { bg, color, Icon } = getItemStyle(item);
-                                    const isPrimary = item.action === 'Join Meeting';
                                     return (
-                                        <li key={item.id} className={`flex gap-3 px-4 sm:px-5 py-4 hover:bg-muted/20 transition-colors ${item.status === 'Unread' ? 'bg-primary/5' : ''}`}>
+                                        <li key={item.id} className={`flex gap-3 px-4 sm:px-5 py-4 hover:bg-muted/20 transition-colors ${!item.isRead ? 'bg-primary/5' : ''}`}>
                                             <div className={`h-10 w-10 sm:h-12 sm:w-12 rounded-full ${bg} flex items-center justify-center shrink-0 mt-0.5`}>
                                                 <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${color}`} />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
                                                     <p className="font-semibold text-foreground text-sm">{item.company}</p>
-                                                    {item.status === 'Unread' && (
+                                                    {!item.isRead && (
                                                         <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-rose-400/10 text-rose-400 border border-rose-400/30 uppercase">New</span>
                                                     )}
                                                     <span className="px-1.5 py-0.5 text-[10px] rounded border border-border text-muted-foreground uppercase">{item.type}</span>
@@ -113,18 +108,44 @@ export default function Inbox() {
                                                     <span>·</span>
                                                     <span>{item.status}</span>
                                                 </div>
-                                                <div className="flex items-center gap-2 mt-2">
+
+                                                {/* Action buttons */}
+                                                <div className="flex items-center gap-1.5 mt-3 flex-wrap">
+                                                    {/* Primary action */}
                                                     {item.type === 'interview' && item.start_time && (
-                                                        <Button size="sm" variant="outline" onClick={() => window.open(generateGoogleCalendarUrl(item), '_blank')} className="shrink-0 gap-1.5 text-xs h-8">
+                                                        <Button size="sm" variant="outline" onClick={() => window.open(generateGoogleCalendarUrl(item), '_blank')} className="h-8 px-3 text-xs gap-1.5 rounded-lg border-border/60 hover:border-primary/50 hover:text-primary transition-colors">
                                                             <CalendarPlus className="h-3.5 w-3.5" />
-                                                            Calendar
+                                                            Add to Calendar
                                                         </Button>
                                                     )}
                                                     {item.type !== 'interview' && (
-                                                        <Button size="sm" variant={isPrimary ? 'default' : 'outline'} onClick={() => handleAction(item)} className="shrink-0 h-8 text-xs">
+                                                        <Button size="sm" variant="outline" onClick={() => handleAction(item)} className="h-8 px-3 text-xs rounded-lg border-border/60 hover:border-primary/50 hover:text-primary transition-colors">
                                                             {item.action}
                                                         </Button>
                                                     )}
+
+                                                    {/* Separator */}
+                                                    <div className="w-px h-4 bg-border/60 mx-0.5" />
+
+                                                    {/* Mark read / unread */}
+                                                    <button
+                                                        onClick={() => toggleItemRead(item, !item.isRead)}
+                                                        className="inline-flex items-center gap-1.5 h-8 px-2.5 text-xs rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+                                                    >
+                                                        {item.isRead
+                                                            ? <><Mail className="h-3.5 w-3.5" /> Mark unread</>
+                                                            : <><MailOpen className="h-3.5 w-3.5" /> Mark read</>
+                                                        }
+                                                    </button>
+
+                                                    {/* Delete */}
+                                                    <button
+                                                        onClick={() => deleteItem(item)}
+                                                        className="inline-flex items-center justify-center h-8 w-8 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors ml-auto"
+                                                        title="Remove notification"
+                                                    >
+                                                        <Trash2 className="h-3.5 w-3.5" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         </li>
@@ -136,7 +157,6 @@ export default function Inbox() {
                 </Card>
             </div>
 
-            {/* Chat Modal */}
             {openChat && chatTarget && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
                     <div className="bg-card border border-border/60 rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
@@ -147,6 +167,14 @@ export default function Inbox() {
                     </div>
                 </div>
             )}
+        </>
+    );
+}
+
+export default function Inbox() {
+    return (
+        <DashboardLayout>
+            <InboxContent />
         </DashboardLayout>
     );
 }

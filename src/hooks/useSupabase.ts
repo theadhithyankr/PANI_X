@@ -142,10 +142,11 @@ export interface InboxItem {
     title: string;
     date: string;
     status: string;
+    isRead: boolean;
     action: string;
     icon: any;
     color: string;
-    senderId?: string; // ID of the user to chat with (Employer or Candidate)
+    senderId?: string;
     start_time?: string;
     end_time?: string;
 }
@@ -370,20 +371,23 @@ export function useCandidates() {
                     best_job_title: bestJobTitle,
                     skills: p.skills || [],
                     location: p.location || 'Remote',
-                    experience: p.experience_years || 0,
+                    // Only trust experience_years when actual work history entries exist
+                    experience: (Array.isArray(p.experience) && p.experience.length > 0) || (Array.isArray(p.work_experience) && p.work_experience.length > 0)
+                        ? (p.experience_years || 0)
+                        : 0,
                     resume_url: p.resume_url,
                     avatar_url: p.avatar_url,
                     cover_url: p.cover_url,
                     email: p.email,
-                    bio: p.bio || p.summary,
-                    work_experience: p.work_experience || [],
+                    bio: p.about || p.bio || p.summary,
+                    work_experience: p.experience || p.work_experience || [],
                     education_history: p.education || p.education_history || [],
                     application_status: appStatusMap.get(p.id),
                     hired_job_title: hiredJobMap.get(p.id),
                 };
             })
-            // Sort by best match descending
-            .sort((a: Candidate, b: Candidate) => b.match_score - a.match_score);
+                // Sort by best match descending
+                .sort((a: Candidate, b: Candidate) => b.match_score - a.match_score);
             setCandidates(mappedCandidates);
         }
         setLoading(false);
@@ -588,6 +592,7 @@ export function useInterviews() {
 
 export function useInbox() {
     const [inboxItems, setInboxItems] = useState<InboxItem[]>([]);
+    const [unreadCount, setUnreadCount] = useState(0);
     const [loading, setLoading] = useState(true);
 
     const fetchInbox = async () => {
@@ -604,7 +609,8 @@ export function useInbox() {
                 applications (jobs (title))
             `)
             .eq('candidate_id', user.id)
-            .eq('status', 'scheduled');
+            .eq('status', 'scheduled')
+            .neq('candidate_dismissed', true);
 
         // 2. Fetch Application Updates (as 'message' type) - e.g. status changed from pending
         const { data: applications } = await supabase
@@ -614,7 +620,8 @@ export function useInbox() {
                 jobs (title, employer_id, profiles (company_name))
             `)
             .eq('candidate_id', user.id)
-            .neq('status', 'pending'); // Only show if status has changed
+            .neq('status', 'pending')
+            .neq('candidate_dismissed', true);
 
         // 3. Fetch Direct Messages (Unread or recent)
         const { data: directMessages } = await supabase
@@ -624,12 +631,15 @@ export function useInbox() {
                 profiles!messages_sender_id_fkey (full_name, company_name)
             `)
             .eq('receiver_id', user.id)
+            .neq('candidate_dismissed', true)
             .order('created_at', { ascending: false });
 
         const items: InboxItem[] = [];
+        let unread = 0;
 
         if (interviews) {
             interviews.forEach((inv: any) => {
+                const isRead = inv.is_viewed ?? false;
                 items.push({
                     id: `inv-${inv.id}`,
                     type: 'interview',
@@ -637,55 +647,105 @@ export function useInbox() {
                     title: `Interview for ${inv.applications?.jobs?.title}`,
                     date: new Date(inv.start_time).toLocaleString(),
                     status: 'Scheduled',
+                    isRead,
                     action: 'Join Meeting',
-                    icon: null, // Component will handle
+                    icon: null,
                     color: 'primary',
                     senderId: inv.employer_id,
                     start_time: inv.start_time,
                     end_time: inv.end_time
                 });
+                if (!isRead) unread++;
             });
         }
 
         if (applications) {
             applications.forEach((app: any) => {
+                const isRead = app.is_viewed ?? false;
                 items.push({
                     id: `app-${app.id}`,
                     type: 'message',
                     company: app.jobs?.profiles?.company_name || 'Unknown',
                     title: `Application Status: ${app.status.toUpperCase()}`,
-                    date: new Date(app.created_at).toLocaleDateString(), // Ideally updated_at but created_at is fine for now
-                    status: 'Unread', // Check if we have read/unread logic later
+                    date: new Date(app.created_at).toLocaleDateString(),
+                    status: isRead ? 'Read' : 'Unread',
+                    isRead,
                     action: 'View Details',
                     icon: null,
                     color: 'info',
                     senderId: app.jobs?.employer_id
                 });
+                if (!isRead) unread++;
             });
         }
 
         if (directMessages) {
-            // Deduplicate by sender to show "threads" or just show all. 
-            // Simple: Show all unread, or latest from unique senders.
-            // Let's show all for now to be safe and visible.
             directMessages.forEach((msg: any) => {
+                const isRead = msg.is_read ?? false;
                 items.push({
                     id: `msg-${msg.id}`,
                     type: 'message',
                     company: msg.profiles?.company_name || msg.profiles?.full_name || 'Unknown',
                     title: msg.content.substring(0, 50) + (msg.content.length > 50 ? '...' : ''),
                     date: new Date(msg.created_at).toLocaleDateString(),
-                    status: msg.is_read ? 'Read' : 'Unread',
-                    action: 'Message', // This triggers the chat action in Inbox.tsx
+                    status: isRead ? 'Read' : 'Unread',
+                    isRead,
+                    action: 'Message',
                     icon: null,
                     color: 'success',
                     senderId: msg.sender_id
                 });
+                if (!isRead) unread++;
             });
         }
 
         setInboxItems(items);
+        setUnreadCount(unread);
         setLoading(false);
+    };
+
+    const markApplicationAsViewed = async (applicationId: string) => {
+        const { error } = await supabase
+            .from('applications')
+            .update({ is_viewed: true })
+            .eq('id', applicationId);
+
+        if (error) console.error('Error marking application as viewed:', error);
+        else fetchInbox();
+    };
+
+    const markDirectMessagesAsRead = async (senderId: string) => {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('receiver_id', user.id)
+            .eq('sender_id', senderId)
+            .eq('is_read', false);
+        fetchInbox();
+    };
+
+    const toggleItemRead = async (item: InboxItem, read: boolean) => {
+        if (item.id.startsWith('inv-')) {
+            await supabase.from('interviews').update({ is_viewed: read }).eq('id', item.id.replace('inv-', ''));
+        } else if (item.id.startsWith('msg-')) {
+            await supabase.from('messages').update({ is_read: read }).eq('id', item.id.replace('msg-', ''));
+        } else if (item.id.startsWith('app-')) {
+            await supabase.from('applications').update({ is_viewed: read }).eq('id', item.id.replace('app-', ''));
+        }
+        fetchInbox();
+    };
+
+    const deleteItem = async (item: InboxItem) => {
+        if (item.id.startsWith('inv-')) {
+            await supabase.from('interviews').update({ candidate_dismissed: true }).eq('id', item.id.replace('inv-', ''));
+        } else if (item.id.startsWith('msg-')) {
+            await supabase.from('messages').update({ candidate_dismissed: true }).eq('id', item.id.replace('msg-', ''));
+        } else if (item.id.startsWith('app-')) {
+            await supabase.from('applications').update({ candidate_dismissed: true }).eq('id', item.id.replace('app-', ''));
+        }
+        fetchInbox();
     };
 
     useEffect(() => {
@@ -706,7 +766,7 @@ export function useInbox() {
         return () => { supabase.removeChannel(channel); };
     }, []);
 
-    return { inboxItems, loading, fetchInbox };
+    return { inboxItems, unreadCount, loading, fetchInbox, markApplicationAsViewed, markDirectMessagesAsRead, toggleItemRead, deleteItem };
 }
 
 export function useDashboardStats() {
@@ -892,6 +952,9 @@ export function useMessages() {
         setCurrentUserId(user.id);
         await loadMessages(user.id, otherId);
 
+        // Mark all messages from the other user as read
+        await markMessagesAsRead(user.id, otherId);
+
         // Subscribe to real-time new messages
         const channel = supabase
             .channel(`messages:${[user.id, otherId].sort().join('-')}`)
@@ -901,6 +964,17 @@ export function useMessages() {
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
+    };
+
+    const markMessagesAsRead = async (userId: string, senderId: string) => {
+        const { error } = await supabase
+            .from('messages')
+            .update({ is_read: true })
+            .eq('receiver_id', userId)
+            .eq('sender_id', senderId)
+            .eq('is_read', false);
+
+        if (error) console.error('Error marking messages as read:', error);
     };
 
     const sendMessage = async (receiverId: string, content: string) => {
@@ -915,5 +989,1690 @@ export function useMessages() {
         if (currentUserId) await loadMessages(currentUserId, receiverId);
     };
 
-    return { messages, loading, fetchMessages, sendMessage };
+    return { messages, loading, fetchMessages, sendMessage, markMessagesAsRead };
+}
+
+export interface Campaign {
+    id: string;
+    employer_id: string;
+    job_id: string;
+    name: string;
+    start_date: string;
+    end_date: string;
+    status: 'draft' | 'active' | 'completed';
+    visibility: 'public' | 'invite-only';
+    min_matching_score?: number;
+    required_skills?: any[];
+    min_experience?: number;
+    max_experience?: number;
+    education_requirements?: any[];
+    created_at: string;
+    updated_at: string;
+    // Joined data
+    job?: Job;
+    rounds?: CampaignRound[];
+}
+
+export interface CampaignRound {
+    id: string;
+    campaign_id: string;
+    round_number: number;
+    name: string;
+    type: 'aptitude test' | 'technical assessment' | 'HR interview' | 'technical interview' | 'group discussion';
+    scheduled_date: string;
+    min_passing_score?: number;
+    created_at: string;
+}
+
+export interface CampaignFilters {
+    status?: 'draft' | 'active' | 'completed';
+    visibility?: 'public' | 'invite-only';
+    employer_id?: string;
+}
+
+export function useCampaigns() {
+    const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    /**
+     * Fetch campaigns with optional filters
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4
+     */
+    const getCampaigns = async (filters?: CampaignFilters) => {
+        setLoading(true);
+
+        let query = supabase
+            .from('hiring_campaigns')
+            .select(`
+                *,
+                jobs (
+                    id,
+                    title,
+                    description,
+                    location,
+                    type,
+                    experience_level,
+                    skills,
+                    salary_range,
+                    work_mode,
+                    openings,
+                    is_active,
+                    created_at
+                ),
+                campaign_rounds (
+                    id,
+                    campaign_id,
+                    round_number,
+                    name,
+                    type,
+                    scheduled_date,
+                    min_passing_score,
+                    created_at
+                )
+            `)
+            .order('created_at', { ascending: false });
+
+        // Apply filters
+        if (filters?.status) {
+            query = query.eq('status', filters.status);
+        }
+        if (filters?.visibility) {
+            query = query.eq('visibility', filters.visibility);
+        }
+        if (filters?.employer_id) {
+            query = query.eq('employer_id', filters.employer_id);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error fetching campaigns:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        const mappedCampaigns: Campaign[] = data.map((campaign: any) => ({
+            id: campaign.id,
+            employer_id: campaign.employer_id,
+            job_id: campaign.job_id,
+            name: campaign.name,
+            start_date: campaign.start_date,
+            end_date: campaign.end_date,
+            status: campaign.status,
+            visibility: campaign.visibility,
+            min_matching_score: campaign.min_matching_score,
+            required_skills: campaign.required_skills,
+            min_experience: campaign.min_experience,
+            max_experience: campaign.max_experience,
+            education_requirements: campaign.education_requirements,
+            created_at: campaign.created_at,
+            updated_at: campaign.updated_at,
+            job: campaign.jobs ? {
+                id: campaign.jobs.id,
+                role: campaign.jobs.title,
+                title: campaign.jobs.title,
+                type: campaign.jobs.type || 'Full Time',
+                location: campaign.jobs.location,
+                description: campaign.jobs.description,
+                posted_at: new Date(campaign.jobs.created_at).toLocaleDateString(),
+                applicants_count: 0,
+                status: campaign.jobs.is_active ? 'Active' : 'Closed',
+                experience_level: campaign.jobs.experience_level,
+                skills: campaign.jobs.skills,
+                salary_range: campaign.jobs.salary_range,
+                work_mode: campaign.jobs.work_mode,
+                openings: campaign.jobs.openings,
+            } : undefined,
+            rounds: campaign.campaign_rounds ? campaign.campaign_rounds
+                .sort((a: any, b: any) => a.round_number - b.round_number)
+                .map((round: any) => ({
+                    id: round.id,
+                    campaign_id: round.campaign_id,
+                    round_number: round.round_number,
+                    name: round.name,
+                    type: round.type,
+                    scheduled_date: round.scheduled_date,
+                    min_passing_score: round.min_passing_score,
+                    created_at: round.created_at,
+                })) : [],
+        }));
+
+        setCampaigns(mappedCampaigns);
+        setLoading(false);
+        return mappedCampaigns;
+    };
+
+    /**
+     * Fetch single campaign by ID with rounds
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4
+     */
+    const getCampaignById = async (id: string): Promise<Campaign | null> => {
+        const { data, error } = await supabase
+            .from('hiring_campaigns')
+            .select(`
+                *,
+                jobs (
+                    id,
+                    title,
+                    description,
+                    location,
+                    type,
+                    experience_level,
+                    skills,
+                    salary_range,
+                    work_mode,
+                    openings,
+                    is_active,
+                    created_at
+                ),
+                campaign_rounds (
+                    id,
+                    campaign_id,
+                    round_number,
+                    name,
+                    type,
+                    scheduled_date,
+                    min_passing_score,
+                    created_at
+                )
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            console.error('Error fetching campaign:', error);
+            throw error;
+        }
+
+        if (!data) return null;
+
+        return {
+            id: data.id,
+            employer_id: data.employer_id,
+            job_id: data.job_id,
+            name: data.name,
+            start_date: data.start_date,
+            end_date: data.end_date,
+            status: data.status,
+            visibility: data.visibility,
+            min_matching_score: data.min_matching_score,
+            required_skills: data.required_skills,
+            min_experience: data.min_experience,
+            max_experience: data.max_experience,
+            education_requirements: data.education_requirements,
+            created_at: data.created_at,
+            updated_at: data.updated_at,
+            job: data.jobs ? {
+                id: data.jobs.id,
+                role: data.jobs.title,
+                title: data.jobs.title,
+                type: data.jobs.type || 'Full Time',
+                location: data.jobs.location,
+                description: data.jobs.description,
+                posted_at: new Date(data.jobs.created_at).toLocaleDateString(),
+                applicants_count: 0,
+                status: data.jobs.is_active ? 'Active' : 'Closed',
+                experience_level: data.jobs.experience_level,
+                skills: data.jobs.skills,
+                salary_range: data.jobs.salary_range,
+                work_mode: data.jobs.work_mode,
+                openings: data.jobs.openings,
+            } : undefined,
+            rounds: data.campaign_rounds ? data.campaign_rounds
+                .sort((a: any, b: any) => a.round_number - b.round_number)
+                .map((round: any) => ({
+                    id: round.id,
+                    campaign_id: round.campaign_id,
+                    round_number: round.round_number,
+                    name: round.name,
+                    type: round.type,
+                    scheduled_date: round.scheduled_date,
+                    min_passing_score: round.min_passing_score,
+                    created_at: round.created_at,
+                })) : [],
+        };
+    };
+
+    /**
+     * Create new campaign with validation
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.8
+     */
+    const createCampaign = async (data: {
+        job_id: string;
+        name: string;
+        start_date: string;
+        end_date: string;
+        visibility?: 'public' | 'invite-only';
+        min_matching_score?: number;
+        required_skills?: any[];
+        min_experience?: number;
+        max_experience?: number;
+        education_requirements?: any[];
+    }) => {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error('User not authenticated');
+
+        // Validate date range (Requirement 1.2)
+        const startDate = new Date(data.start_date);
+        const endDate = new Date(data.end_date);
+        if (endDate <= startDate) {
+            throw new Error('End date must be after start date');
+        }
+
+        // Validate min_matching_score range (Requirement 1.4)
+        if (data.min_matching_score !== undefined &&
+            (data.min_matching_score < 0 || data.min_matching_score > 100)) {
+            throw new Error('Minimum matching score must be between 0 and 100');
+        }
+
+        const { data: campaign, error } = await supabase
+            .from('hiring_campaigns')
+            .insert({
+                employer_id: userData.user.id,
+                job_id: data.job_id,
+                name: data.name,
+                start_date: data.start_date,
+                end_date: data.end_date,
+                status: 'draft', // Requirement 1.4: initial status is draft
+                visibility: data.visibility || 'public', // Requirement 1.8
+                min_matching_score: data.min_matching_score || 0,
+                required_skills: data.required_skills || [],
+                min_experience: data.min_experience || 0,
+                max_experience: data.max_experience,
+                education_requirements: data.education_requirements || [],
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await getCampaigns({ employer_id: userData.user.id });
+        return campaign;
+    };
+
+    /**
+     * Update campaign with status-based restrictions
+     * Validates: Requirements 1.8, 1.9
+     */
+    const updateCampaign = async (id: string, updates: Partial<Campaign>) => {
+        // Fetch current campaign to check status
+        const { data: currentCampaign, error: fetchError } = await supabase
+            .from('hiring_campaigns')
+            .select('status')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Requirement 1.9: Prevent modification of critical fields when active or completed
+        if (currentCampaign.status === 'active' || currentCampaign.status === 'completed') {
+            // Remove restricted fields from updates
+            const { start_date, end_date, ...allowedUpdates } = updates;
+
+            if (start_date || end_date) {
+                throw new Error('Cannot modify start date, end date, or pipeline structure when campaign is active or completed');
+            }
+
+            const { error } = await supabase
+                .from('hiring_campaigns')
+                .update(allowedUpdates)
+                .eq('id', id);
+
+            if (error) throw error;
+        } else {
+            // Draft status: allow all updates (Requirement 1.8)
+            // Validate date range if dates are being updated
+            if (updates.start_date && updates.end_date) {
+                const startDate = new Date(updates.start_date);
+                const endDate = new Date(updates.end_date);
+                if (endDate <= startDate) {
+                    throw new Error('End date must be after start date');
+                }
+            }
+
+            const { error } = await supabase
+                .from('hiring_campaigns')
+                .update(updates)
+                .eq('id', id);
+
+            if (error) throw error;
+        }
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+            await getCampaigns({ employer_id: userData.user.id });
+        }
+    };
+
+    /**
+     * Soft delete campaign
+     * Validates: Requirements 1.1, 1.2, 1.3, 1.4
+     */
+    const deleteCampaign = async (id: string) => {
+        // Soft delete by setting status to completed
+        const { error } = await supabase
+            .from('hiring_campaigns')
+            .update({ status: 'completed' })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        const { data: userData } = await supabase.auth.getUser();
+        if (userData.user) {
+            await getCampaigns({ employer_id: userData.user.id });
+        }
+    };
+
+    useEffect(() => {
+        // Initial fetch
+        supabase.auth.getUser().then(({ data }) => {
+            if (data.user) {
+                getCampaigns({ employer_id: data.user.id });
+            }
+        });
+
+        // Real-time subscription for campaign updates
+        const channel = supabase
+            .channel('realtime-campaigns')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'hiring_campaigns' }, () => {
+                supabase.auth.getUser().then(({ data }) => {
+                    if (data.user) {
+                        getCampaigns({ employer_id: data.user.id });
+                    }
+                });
+            })
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'campaign_rounds' }, () => {
+                supabase.auth.getUser().then(({ data }) => {
+                    if (data.user) {
+                        getCampaigns({ employer_id: data.user.id });
+                    }
+                });
+            })
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, []);
+
+    return {
+        campaigns,
+        loading,
+        getCampaigns,
+        getCampaignById,
+        createCampaign,
+        updateCampaign,
+        deleteCampaign
+    };
+}
+
+/**
+ * Hook for managing campaign rounds (pipeline stages)
+ * Validates: Requirements 3.2, 3.3, 3.4, 3.5, 3.6, 3.7, 3.8
+ */
+export function useCampaignRounds() {
+    const [rounds, setRounds] = useState<CampaignRound[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    /**
+     * Fetch all rounds for a campaign
+     * Validates: Requirements 3.2
+     */
+    const getRounds = async (campaignId: string): Promise<CampaignRound[]> => {
+        setLoading(true);
+
+        const { data, error } = await supabase
+            .from('campaign_rounds')
+            .select('*')
+            .eq('campaign_id', campaignId)
+            .order('round_number', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching rounds:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        const mappedRounds: CampaignRound[] = data.map((round: any) => ({
+            id: round.id,
+            campaign_id: round.campaign_id,
+            round_number: round.round_number,
+            name: round.name,
+            type: round.type,
+            scheduled_date: round.scheduled_date,
+            min_passing_score: round.min_passing_score,
+            created_at: round.created_at,
+        }));
+
+        setRounds(mappedRounds);
+        setLoading(false);
+        return mappedRounds;
+    };
+
+    /**
+     * Create a new round with date validation
+     * Validates: Requirements 3.2, 3.6, 3.7
+     */
+    const createRound = async (campaignId: string, data: {
+        name: string;
+        type: 'aptitude test' | 'technical assessment' | 'HR interview' | 'technical interview' | 'group discussion';
+        scheduled_date: string;
+        min_passing_score?: number;
+    }) => {
+        // Fetch campaign to validate dates
+        const { data: campaign, error: campaignError } = await supabase
+            .from('hiring_campaigns')
+            .select('start_date, end_date, status')
+            .eq('id', campaignId)
+            .single();
+
+        if (campaignError) throw campaignError;
+
+        // Requirement 3.7: Round dates must fall within campaign dates
+        const roundDate = new Date(data.scheduled_date);
+        const campaignStart = new Date(campaign.start_date);
+        const campaignEnd = new Date(campaign.end_date);
+
+        if (roundDate < campaignStart || roundDate > campaignEnd) {
+            throw new Error('Round date must be between campaign start date and end date');
+        }
+
+        // Fetch existing rounds to determine round_number and validate sequential dates
+        const { data: existingRounds, error: roundsError } = await supabase
+            .from('campaign_rounds')
+            .select('round_number, scheduled_date')
+            .eq('campaign_id', campaignId)
+            .order('round_number', { ascending: true });
+
+        if (roundsError) throw roundsError;
+
+        // Calculate next round number
+        const nextRoundNumber = existingRounds.length > 0
+            ? Math.max(...existingRounds.map((r: any) => r.round_number)) + 1
+            : 1;
+
+        // Requirement 3.6: Validate sequential dates
+        if (existingRounds.length > 0) {
+            const lastRound = existingRounds[existingRounds.length - 1];
+            const lastRoundDate = new Date(lastRound.scheduled_date);
+            if (roundDate <= lastRoundDate) {
+                throw new Error('Round dates must be sequential. New round date must be after the last round date.');
+            }
+        }
+
+        // Validate min_passing_score range
+        if (data.min_passing_score !== undefined &&
+            (data.min_passing_score < 0 || data.min_passing_score > 100)) {
+            throw new Error('Minimum passing score must be between 0 and 100');
+        }
+
+        const { data: newRound, error } = await supabase
+            .from('campaign_rounds')
+            .insert({
+                campaign_id: campaignId,
+                round_number: nextRoundNumber,
+                name: data.name,
+                type: data.type,
+                scheduled_date: data.scheduled_date,
+                min_passing_score: data.min_passing_score || 0,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await getRounds(campaignId);
+        return newRound;
+    };
+
+    /**
+     * Update round details
+     * Validates: Requirements 3.4, 3.6, 3.7
+     */
+    const updateRound = async (id: string, updates: Partial<CampaignRound>) => {
+        // Fetch the round to get campaign_id
+        const { data: round, error: fetchError } = await supabase
+            .from('campaign_rounds')
+            .select('campaign_id, round_number')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // If updating scheduled_date, validate it
+        if (updates.scheduled_date) {
+            // Fetch campaign dates
+            const { data: campaign, error: campaignError } = await supabase
+                .from('hiring_campaigns')
+                .select('start_date, end_date')
+                .eq('id', round.campaign_id)
+                .single();
+
+            if (campaignError) throw campaignError;
+
+            // Requirement 3.7: Round dates must fall within campaign dates
+            const newDate = new Date(updates.scheduled_date);
+            const campaignStart = new Date(campaign.start_date);
+            const campaignEnd = new Date(campaign.end_date);
+
+            if (newDate < campaignStart || newDate > campaignEnd) {
+                throw new Error('Round date must be between campaign start date and end date');
+            }
+
+            // Requirement 3.6: Validate sequential dates
+            const { data: allRounds, error: roundsError } = await supabase
+                .from('campaign_rounds')
+                .select('id, round_number, scheduled_date')
+                .eq('campaign_id', round.campaign_id)
+                .order('round_number', { ascending: true });
+
+            if (roundsError) throw roundsError;
+
+            // Check if new date maintains sequential order
+            const currentRoundIndex = allRounds.findIndex((r: any) => r.id === id);
+
+            // Check previous round
+            if (currentRoundIndex > 0) {
+                const prevRoundDate = new Date(allRounds[currentRoundIndex - 1].scheduled_date);
+                if (newDate <= prevRoundDate) {
+                    throw new Error('Round date must be after the previous round date');
+                }
+            }
+
+            // Check next round
+            if (currentRoundIndex < allRounds.length - 1) {
+                const nextRoundDate = new Date(allRounds[currentRoundIndex + 1].scheduled_date);
+                if (newDate >= nextRoundDate) {
+                    throw new Error('Round date must be before the next round date');
+                }
+            }
+        }
+
+        // Validate min_passing_score if being updated
+        if (updates.min_passing_score !== undefined &&
+            (updates.min_passing_score < 0 || updates.min_passing_score > 100)) {
+            throw new Error('Minimum passing score must be between 0 and 100');
+        }
+
+        const { error } = await supabase
+            .from('campaign_rounds')
+            .update(updates)
+            .eq('id', id);
+
+        if (error) throw error;
+
+        await getRounds(round.campaign_id);
+    };
+
+    /**
+     * Delete a round from the pipeline
+     * Validates: Requirements 3.3
+     */
+    const deleteRound = async (id: string) => {
+        // Fetch the round to get campaign_id for refresh
+        const { data: round, error: fetchError } = await supabase
+            .from('campaign_rounds')
+            .select('campaign_id')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        const { error } = await supabase
+            .from('campaign_rounds')
+            .delete()
+            .eq('id', id);
+
+        if (error) throw error;
+
+        await getRounds(round.campaign_id);
+    };
+
+    /**
+     * Reorder rounds by updating round_number for sequential ordering
+     * Validates: Requirements 3.5, 3.6
+     */
+    const reorderRounds = async (campaignId: string, roundIds: string[]) => {
+        // Fetch all rounds with their scheduled dates
+        const { data: rounds, error: fetchError } = await supabase
+            .from('campaign_rounds')
+            .select('id, scheduled_date')
+            .eq('campaign_id', campaignId);
+
+        if (fetchError) throw fetchError;
+
+        // Create a map of round IDs to scheduled dates
+        const dateMap = new Map(rounds.map((r: any) => [r.id, new Date(r.scheduled_date)]));
+
+        // Validate that the new order maintains sequential dates (Requirement 3.6)
+        for (let i = 0; i < roundIds.length - 1; i++) {
+            const currentDate = dateMap.get(roundIds[i]);
+            const nextDate = dateMap.get(roundIds[i + 1]);
+
+            if (!currentDate || !nextDate) {
+                throw new Error('Invalid round ID in reorder list');
+            }
+
+            if (currentDate >= nextDate) {
+                throw new Error('Cannot reorder: rounds must maintain sequential dates. Round dates must be in ascending order.');
+            }
+        }
+
+        // Update round_number for each round in the new order
+        const updates = roundIds.map((roundId, index) => ({
+            id: roundId,
+            round_number: index + 1,
+        }));
+
+        // Execute updates sequentially to avoid conflicts
+        for (const update of updates) {
+            const { error } = await supabase
+                .from('campaign_rounds')
+                .update({ round_number: update.round_number })
+                .eq('id', update.id);
+
+            if (error) throw error;
+        }
+
+        await getRounds(campaignId);
+    };
+
+    return {
+        rounds,
+        loading,
+        getRounds,
+        createRound,
+        updateRound,
+        deleteRound,
+        reorderRounds,
+    };
+}
+
+export interface CampaignApplication {
+    id: string;
+    campaign_id: string;
+    candidate_id: string;
+    job_id: string;
+    status: 'pending' | 'in-progress' | 'completed' | 'rejected';
+    current_round: number;
+    applied_at: string;
+    updated_at: string;
+    // Joined data
+    campaign?: Campaign;
+    candidate?: Candidate;
+    round_results?: CampaignRoundResult[];
+}
+
+export interface CampaignRoundResult {
+    id: string;
+    application_id: string;
+    round_id: string;
+    score?: number;
+    status: 'passed' | 'failed' | 'pending';
+    feedback?: string;
+    completed_at: string;
+}
+
+export interface ApplicationFilters {
+    campaign_id?: string;
+    candidate_id?: string;
+    status?: 'pending' | 'in-progress' | 'completed' | 'rejected';
+    current_round?: number;
+}
+
+export interface ApplicationStats {
+    total: number;
+    by_round: { round_number: number; count: number }[];
+    by_status: { status: string; count: number }[];
+}
+
+/**
+ * Hook for managing campaign applications
+ * Validates: Requirements 5.4, 5.5, 5.6, 6.1, 6.2, 6.3, 6.4, 6.5
+ */
+export function useCampaignApplications() {
+    const [applications, setApplications] = useState<CampaignApplication[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    /**
+     * Fetch applications with optional filters
+     * Validates: Requirements 5.4, 6.1, 6.2
+     */
+    const getApplications = async (filters?: ApplicationFilters): Promise<CampaignApplication[]> => {
+        setLoading(true);
+
+        let query = supabase
+            .from('campaign_applications')
+            .select(`
+                *,
+                hiring_campaigns (
+                    id,
+                    name,
+                    start_date,
+                    end_date,
+                    status,
+                    visibility
+                ),
+                profiles!campaign_applications_candidate_id_fkey (
+                    id,
+                    full_name,
+                    email,
+                    headline,
+                    skills,
+                    location,
+                    experience_years,
+                    avatar_url
+                )
+            `)
+            .order('applied_at', { ascending: false });
+
+        // Apply filters (Requirement 6.2)
+        if (filters?.campaign_id) {
+            query = query.eq('campaign_id', filters.campaign_id);
+        }
+        if (filters?.candidate_id) {
+            query = query.eq('candidate_id', filters.candidate_id);
+        }
+        if (filters?.status) {
+            query = query.eq('status', filters.status);
+        }
+        if (filters?.current_round !== undefined) {
+            query = query.eq('current_round', filters.current_round);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error fetching applications:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        const mappedApplications: CampaignApplication[] = data.map((app: any) => ({
+            id: app.id,
+            campaign_id: app.campaign_id,
+            candidate_id: app.candidate_id,
+            job_id: app.job_id,
+            status: app.status,
+            current_round: app.current_round,
+            applied_at: app.applied_at,
+            updated_at: app.updated_at,
+            campaign: app.hiring_campaigns ? {
+                id: app.hiring_campaigns.id,
+                employer_id: '',
+                job_id: '',
+                name: app.hiring_campaigns.name,
+                start_date: app.hiring_campaigns.start_date,
+                end_date: app.hiring_campaigns.end_date,
+                status: app.hiring_campaigns.status,
+                visibility: app.hiring_campaigns.visibility,
+                created_at: '',
+                updated_at: '',
+            } : undefined,
+            candidate: app.profiles ? {
+                id: app.profiles.id,
+                full_name: app.profiles.full_name,
+                role: app.profiles.headline || 'Candidate',
+                headline: app.profiles.headline,
+                match_score: 0,
+                skills: app.profiles.skills || [],
+                location: app.profiles.location || 'Remote',
+                experience: app.profiles.experience_years || 0,
+                email: app.profiles.email,
+                avatar_url: app.profiles.avatar_url,
+            } : undefined,
+        }));
+
+        setApplications(mappedApplications);
+        setLoading(false);
+        return mappedApplications;
+    };
+
+    /**
+     * Fetch single application by ID with round results
+     * Validates: Requirements 5.6, 5.11
+     */
+    const getApplicationById = async (id: string): Promise<CampaignApplication | null> => {
+        const { data, error } = await supabase
+            .from('campaign_applications')
+            .select(`
+                *,
+                hiring_campaigns (
+                    id,
+                    name,
+                    start_date,
+                    end_date,
+                    status,
+                    visibility
+                ),
+                profiles!campaign_applications_candidate_id_fkey (
+                    id,
+                    full_name,
+                    email,
+                    headline,
+                    skills,
+                    location,
+                    experience_years,
+                    avatar_url
+                ),
+                campaign_round_results (
+                    id,
+                    application_id,
+                    round_id,
+                    score,
+                    status,
+                    feedback,
+                    completed_at
+                )
+            `)
+            .eq('id', id)
+            .single();
+
+        if (error) {
+            console.error('Error fetching application:', error);
+            throw error;
+        }
+
+        if (!data) return null;
+
+        return {
+            id: data.id,
+            campaign_id: data.campaign_id,
+            candidate_id: data.candidate_id,
+            job_id: data.job_id,
+            status: data.status,
+            current_round: data.current_round,
+            applied_at: data.applied_at,
+            updated_at: data.updated_at,
+            campaign: data.hiring_campaigns ? {
+                id: data.hiring_campaigns.id,
+                employer_id: '',
+                job_id: '',
+                name: data.hiring_campaigns.name,
+                start_date: data.hiring_campaigns.start_date,
+                end_date: data.hiring_campaigns.end_date,
+                status: data.hiring_campaigns.status,
+                visibility: data.hiring_campaigns.visibility,
+                created_at: '',
+                updated_at: '',
+            } : undefined,
+            candidate: data.profiles ? {
+                id: data.profiles.id,
+                full_name: data.profiles.full_name,
+                role: data.profiles.headline || 'Candidate',
+                headline: data.profiles.headline,
+                match_score: 0,
+                skills: data.profiles.skills || [],
+                location: data.profiles.location || 'Remote',
+                experience: data.profiles.experience_years || 0,
+                email: data.profiles.email,
+                avatar_url: data.profiles.avatar_url,
+            } : undefined,
+            round_results: data.campaign_round_results ? data.campaign_round_results.map((result: any) => ({
+                id: result.id,
+                application_id: result.application_id,
+                round_id: result.round_id,
+                score: result.score,
+                status: result.status,
+                feedback: result.feedback,
+                completed_at: result.completed_at,
+            })) : [],
+        };
+    };
+
+    /**
+     * Create application with eligibility check
+     * Validates: Requirements 4.5, 4.6, 4.8, 5.4, 5.5, 5.6
+     */
+    const createApplication = async (campaignId: string, candidateId: string): Promise<CampaignApplication> => {
+        // Fetch campaign with eligibility criteria
+        const { data: campaign, error: campaignError } = await supabase
+            .from('hiring_campaigns')
+            .select('*, jobs(*)')
+            .eq('id', campaignId)
+            .single();
+
+        if (campaignError) throw campaignError;
+
+        // Fetch candidate profile for eligibility check
+        const { data: candidate, error: candidateError } = await supabase
+            .from('profiles')
+            .select('*')
+            .eq('id', candidateId)
+            .single();
+
+        if (candidateError) throw candidateError;
+
+        // Requirement 4.5: Calculate eligibility
+        const eligibilityIssues: string[] = [];
+
+        // Check minimum matching score (Requirement 4.1, 4.8)
+        if (campaign.min_matching_score && campaign.jobs) {
+            const matchResult = calculateJobMatch(campaign.jobs, candidate);
+            if (matchResult.score < campaign.min_matching_score) {
+                eligibilityIssues.push(`Matching score ${Math.round(matchResult.score)}% is below minimum ${campaign.min_matching_score}%`);
+            }
+        }
+
+        // Check experience requirements (Requirement 4.3)
+        const candidateExperience = candidate.experience_years || 0;
+        if (campaign.min_experience && candidateExperience < campaign.min_experience) {
+            eligibilityIssues.push(`Experience ${candidateExperience} years is below minimum ${campaign.min_experience} years`);
+        }
+        if (campaign.max_experience && candidateExperience > campaign.max_experience) {
+            eligibilityIssues.push(`Experience ${candidateExperience} years exceeds maximum ${campaign.max_experience} years`);
+        }
+
+        // Requirement 4.8: Reject if eligibility criteria not met
+        if (eligibilityIssues.length > 0) {
+            throw new Error(`Eligibility check failed: ${eligibilityIssues.join(', ')}`);
+        }
+
+        // Check for duplicate application (Requirement 5.5)
+        const { data: existingApp } = await supabase
+            .from('campaign_applications')
+            .select('id')
+            .eq('campaign_id', campaignId)
+            .eq('candidate_id', candidateId)
+            .single();
+
+        if (existingApp) {
+            throw new Error('You have already applied to this campaign');
+        }
+
+        // Create application (Requirement 5.6)
+        const { data: newApplication, error } = await supabase
+            .from('campaign_applications')
+            .insert({
+                campaign_id: campaignId,
+                candidate_id: candidateId,
+                job_id: campaign.job_id,
+                status: 'pending',
+                current_round: 0,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await getApplications({ campaign_id: campaignId });
+        return newApplication;
+    };
+
+    /**
+     * Update application status
+     * Validates: Requirements 5.9, 5.10, 6.7, 6.8, 6.9
+     */
+    const updateApplicationStatus = async (
+        id: string,
+        status: 'pending' | 'in-progress' | 'completed' | 'rejected'
+    ) => {
+        const { error } = await supabase
+            .from('campaign_applications')
+            .update({ status })
+            .eq('id', id);
+
+        if (error) throw error;
+
+        // Refresh applications
+        const { data: app } = await supabase
+            .from('campaign_applications')
+            .select('campaign_id')
+            .eq('id', id)
+            .single();
+
+        if (app) {
+            await getApplications({ campaign_id: app.campaign_id });
+        }
+    };
+
+    /**
+     * Advance candidate to next round
+     * Validates: Requirements 5.8, 5.9, 6.8, 9.1, 9.2
+     */
+    const advanceToNextRound = async (applicationId: string) => {
+        // Fetch current application
+        const { data: application, error: fetchError } = await supabase
+            .from('campaign_applications')
+            .select('current_round, campaign_id')
+            .eq('id', applicationId)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Requirement 5.8, 9.1: Increment current_round to unlock next round
+        const nextRound = application.current_round + 1;
+
+        const { error } = await supabase
+            .from('campaign_applications')
+            .update({
+                current_round: nextRound,
+                status: 'in-progress',
+            })
+            .eq('id', applicationId);
+
+        if (error) throw error;
+
+        await getApplications({ campaign_id: application.campaign_id });
+    };
+
+    /**
+     * Get application statistics for funnel visualization
+     * Validates: Requirements 6.3, 6.4
+     */
+    const getApplicationStats = async (campaignId: string): Promise<ApplicationStats> => {
+        // Fetch all applications for the campaign
+        const { data: applications, error } = await supabase
+            .from('campaign_applications')
+            .select('current_round, status')
+            .eq('campaign_id', campaignId);
+
+        if (error) throw error;
+
+        // Count by round (Requirement 6.3, 6.4)
+        const roundCounts = new Map<number, number>();
+        const statusCounts = new Map<string, number>();
+
+        applications.forEach((app: any) => {
+            // Count by round
+            const round = app.current_round;
+            roundCounts.set(round, (roundCounts.get(round) || 0) + 1);
+
+            // Count by status
+            statusCounts.set(app.status, (statusCounts.get(app.status) || 0) + 1);
+        });
+
+        return {
+            total: applications.length,
+            by_round: Array.from(roundCounts.entries())
+                .map(([round_number, count]) => ({ round_number, count }))
+                .sort((a, b) => a.round_number - b.round_number),
+            by_status: Array.from(statusCounts.entries())
+                .map(([status, count]) => ({ status, count })),
+        };
+    };
+
+    return {
+        applications,
+        loading,
+        getApplications,
+        getApplicationById,
+        createApplication,
+        updateApplicationStatus,
+        advanceToNextRound,
+        getApplicationStats,
+    };
+}
+
+/**
+ * Hook for managing campaign round results
+ * Validates: Requirements 5.7, 5.8, 5.9, 5.10, 5.11, 5.12, 6.6, 6.7, 6.8, 6.9
+ */
+export function useCampaignRoundResults() {
+    const [results, setResults] = useState<CampaignRoundResult[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    /**
+     * Fetch all round results for an application
+     * Validates: Requirements 5.11, 6.6
+     */
+    const getResults = async (applicationId: string): Promise<CampaignRoundResult[]> => {
+        setLoading(true);
+
+        const { data, error } = await supabase
+            .from('campaign_round_results')
+            .select('*')
+            .eq('application_id', applicationId)
+            .order('completed_at', { ascending: true });
+
+        if (error) {
+            console.error('Error fetching round results:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        const mappedResults: CampaignRoundResult[] = data.map((result: any) => ({
+            id: result.id,
+            application_id: result.application_id,
+            round_id: result.round_id,
+            score: result.score,
+            status: result.status,
+            feedback: result.feedback,
+            completed_at: result.completed_at,
+        }));
+
+        setResults(mappedResults);
+        setLoading(false);
+        return mappedResults;
+    };
+
+    /**
+     * Create a round result and automatically advance candidate if passed
+     * Validates: Requirements 5.7, 5.8, 5.9, 5.10, 6.7, 6.8
+     */
+    const createResult = async (
+        applicationId: string,
+        roundId: string,
+        data: {
+            score?: number;
+            status: 'passed' | 'failed' | 'pending';
+            feedback?: string;
+        }
+    ): Promise<CampaignRoundResult> => {
+        // Validate score range if provided
+        if (data.score !== undefined && (data.score < 0 || data.score > 100)) {
+            throw new Error('Score must be between 0 and 100');
+        }
+
+        // Create the round result (Requirement 5.7, 6.7)
+        const { data: newResult, error } = await supabase
+            .from('campaign_round_results')
+            .insert({
+                application_id: applicationId,
+                round_id: roundId,
+                score: data.score,
+                status: data.status,
+                feedback: data.feedback,
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        // Requirement 5.8, 6.8: Automatically advance candidate when result status is "passed"
+        if (data.status === 'passed') {
+            // Fetch current application to get current_round
+            const { data: application, error: appError } = await supabase
+                .from('campaign_applications')
+                .select('current_round, campaign_id')
+                .eq('id', applicationId)
+                .single();
+
+            if (appError) throw appError;
+
+            // Advance to next round
+            const nextRound = application.current_round + 1;
+
+            const { error: updateError } = await supabase
+                .from('campaign_applications')
+                .update({
+                    current_round: nextRound,
+                    status: 'in-progress',
+                })
+                .eq('id', applicationId);
+
+            if (updateError) throw updateError;
+        }
+
+        // Requirement 5.9, 6.9: Lock subsequent rounds when result status is "failed"
+        if (data.status === 'failed') {
+            // Update application status to rejected to lock subsequent rounds
+            const { error: updateError } = await supabase
+                .from('campaign_applications')
+                .update({
+                    status: 'rejected',
+                })
+                .eq('id', applicationId);
+
+            if (updateError) throw updateError;
+        }
+
+        await getResults(applicationId);
+        return newResult;
+    };
+
+    /**
+     * Update result details
+     * Validates: Requirements 5.10, 5.12, 6.7
+     */
+    const updateResult = async (
+        id: string,
+        data: {
+            score?: number;
+            status?: 'passed' | 'failed' | 'pending';
+            feedback?: string;
+        }
+    ) => {
+        // Validate score range if provided
+        if (data.score !== undefined && (data.score < 0 || data.score > 100)) {
+            throw new Error('Score must be between 0 and 100');
+        }
+
+        // Fetch the current result to get application_id and current status
+        const { data: currentResult, error: fetchError } = await supabase
+            .from('campaign_round_results')
+            .select('application_id, status')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Update the result
+        const { error } = await supabase
+            .from('campaign_round_results')
+            .update(data)
+            .eq('id', id);
+
+        if (error) throw error;
+
+        // Handle status changes
+        if (data.status && data.status !== currentResult.status) {
+            // Requirement 5.8, 6.8: Automatically advance candidate when result status changes to "passed"
+            if (data.status === 'passed') {
+                const { data: application, error: appError } = await supabase
+                    .from('campaign_applications')
+                    .select('current_round, campaign_id')
+                    .eq('id', currentResult.application_id)
+                    .single();
+
+                if (appError) throw appError;
+
+                const nextRound = application.current_round + 1;
+
+                const { error: updateError } = await supabase
+                    .from('campaign_applications')
+                    .update({
+                        current_round: nextRound,
+                        status: 'in-progress',
+                    })
+                    .eq('id', currentResult.application_id);
+
+                if (updateError) throw updateError;
+            }
+
+            // Requirement 5.9, 6.9: Lock subsequent rounds when result status changes to "failed"
+            if (data.status === 'failed') {
+                const { error: updateError } = await supabase
+                    .from('campaign_applications')
+                    .update({
+                        status: 'rejected',
+                    })
+                    .eq('id', currentResult.application_id);
+
+                if (updateError) throw updateError;
+            }
+        }
+
+        await getResults(currentResult.application_id);
+    };
+
+    return {
+        results,
+        loading,
+        getResults,
+        createResult,
+        updateResult,
+    };
+}
+
+export interface CampaignInvitation {
+    id: string;
+    campaign_id: string;
+    employer_id: string;
+    candidate_id: string;
+    status: 'pending' | 'accepted' | 'declined';
+    message?: string;
+    sent_at: string;
+    responded_at?: string;
+    // Joined data
+    campaign?: Campaign;
+    candidate?: Candidate;
+}
+
+export interface InvitationFilters {
+    campaign_id?: string;
+    candidate_id?: string;
+    employer_id?: string;
+    status?: 'pending' | 'accepted' | 'declined';
+}
+
+export interface CandidateSearchFilters {
+    skills?: string[];
+    min_experience?: number;
+    max_experience?: number;
+    location?: string;
+    role?: string;
+}
+
+/**
+ * Hook for managing campaign invitations
+ * Validates: Requirements 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7, 7.8, 7.9, 7.10
+ */
+export function useCampaignInvitations() {
+    const [invitations, setInvitations] = useState<CampaignInvitation[]>([]);
+    const [loading, setLoading] = useState(false);
+
+    /**
+     * Fetch invitations with optional filters
+     * Validates: Requirements 7.9
+     */
+    const getInvitations = async (filters?: InvitationFilters): Promise<CampaignInvitation[]> => {
+        setLoading(true);
+
+        let query = supabase
+            .from('campaign_invitations')
+            .select(`
+                *,
+                hiring_campaigns (
+                    id,
+                    name,
+                    start_date,
+                    end_date,
+                    status,
+                    visibility,
+                    job_id,
+                    jobs (
+                        title,
+                        location,
+                        type
+                    )
+                ),
+                profiles!campaign_invitations_candidate_id_fkey (
+                    id,
+                    full_name,
+                    email,
+                    headline,
+                    skills,
+                    location,
+                    experience_years,
+                    avatar_url
+                )
+            `)
+            .order('sent_at', { ascending: false });
+
+        // Apply filters
+        if (filters?.campaign_id) {
+            query = query.eq('campaign_id', filters.campaign_id);
+        }
+        if (filters?.candidate_id) {
+            query = query.eq('candidate_id', filters.candidate_id);
+        }
+        if (filters?.employer_id) {
+            query = query.eq('employer_id', filters.employer_id);
+        }
+        if (filters?.status) {
+            query = query.eq('status', filters.status);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error fetching invitations:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        const mappedInvitations: CampaignInvitation[] = data.map((inv: any) => ({
+            id: inv.id,
+            campaign_id: inv.campaign_id,
+            employer_id: inv.employer_id,
+            candidate_id: inv.candidate_id,
+            status: inv.status,
+            message: inv.message,
+            sent_at: inv.sent_at,
+            responded_at: inv.responded_at,
+            campaign: inv.hiring_campaigns ? {
+                id: inv.hiring_campaigns.id,
+                employer_id: '',
+                job_id: inv.hiring_campaigns.job_id,
+                name: inv.hiring_campaigns.name,
+                start_date: inv.hiring_campaigns.start_date,
+                end_date: inv.hiring_campaigns.end_date,
+                status: inv.hiring_campaigns.status,
+                visibility: inv.hiring_campaigns.visibility,
+                created_at: '',
+                updated_at: '',
+                job: inv.hiring_campaigns.jobs ? {
+                    id: inv.hiring_campaigns.job_id,
+                    role: inv.hiring_campaigns.jobs.title,
+                    title: inv.hiring_campaigns.jobs.title,
+                    type: inv.hiring_campaigns.jobs.type || 'Full Time',
+                    location: inv.hiring_campaigns.jobs.location,
+                    description: '',
+                    posted_at: '',
+                    applicants_count: 0,
+                    status: 'Active',
+                } : undefined,
+            } : undefined,
+            candidate: inv.profiles ? {
+                id: inv.profiles.id,
+                full_name: inv.profiles.full_name,
+                role: inv.profiles.headline || 'Candidate',
+                headline: inv.profiles.headline,
+                match_score: 0,
+                skills: inv.profiles.skills || [],
+                location: inv.profiles.location || 'Remote',
+                experience: inv.profiles.experience_years || 0,
+                email: inv.profiles.email,
+                avatar_url: inv.profiles.avatar_url,
+            } : undefined,
+        }));
+
+        setInvitations(mappedInvitations);
+        setLoading(false);
+        return mappedInvitations;
+    };
+
+    /**
+     * Send invitation to a candidate
+     * Validates: Requirements 7.3, 7.4, 7.5
+     */
+    const createInvitation = async (
+        campaignId: string,
+        candidateId: string,
+        message?: string
+    ): Promise<CampaignInvitation> => {
+        const { data: userData } = await supabase.auth.getUser();
+        if (!userData.user) throw new Error('User not authenticated');
+
+        // Check for duplicate invitation
+        const { data: existingInvitation } = await supabase
+            .from('campaign_invitations')
+            .select('id')
+            .eq('campaign_id', campaignId)
+            .eq('candidate_id', candidateId)
+            .single();
+
+        if (existingInvitation) {
+            throw new Error('Invitation already sent to this candidate for this campaign');
+        }
+
+        // Requirement 7.4: Create invitation record with status pending
+        const { data: newInvitation, error } = await supabase
+            .from('campaign_invitations')
+            .insert({
+                campaign_id: campaignId,
+                employer_id: userData.user.id,
+                candidate_id: candidateId,
+                status: 'pending',
+                message: message, // Requirement 7.5: Include custom message
+            })
+            .select()
+            .single();
+
+        if (error) throw error;
+
+        await getInvitations({ employer_id: userData.user.id });
+        return newInvitation;
+    };
+
+    /**
+     * Respond to invitation (accept or decline)
+     * Validates: Requirements 7.6, 7.7, 7.8, 7.10
+     */
+    const respondToInvitation = async (
+        id: string,
+        status: 'accepted' | 'declined'
+    ): Promise<void> => {
+        // Fetch invitation details
+        const { data: invitation, error: fetchError } = await supabase
+            .from('campaign_invitations')
+            .select('campaign_id, candidate_id, employer_id')
+            .eq('id', id)
+            .single();
+
+        if (fetchError) throw fetchError;
+
+        // Requirement 7.6, 7.8: Update invitation status
+        const { error: updateError } = await supabase
+            .from('campaign_invitations')
+            .update({
+                status: status,
+                responded_at: new Date().toISOString(),
+            })
+            .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // Requirement 7.7, 7.10: When accepted, create campaign application
+        if (status === 'accepted') {
+            // Check if application already exists
+            const { data: existingApp } = await supabase
+                .from('campaign_applications')
+                .select('id')
+                .eq('campaign_id', invitation.campaign_id)
+                .eq('candidate_id', invitation.candidate_id)
+                .single();
+
+            if (!existingApp) {
+                // Fetch campaign to get job_id
+                const { data: campaign, error: campaignError } = await supabase
+                    .from('hiring_campaigns')
+                    .select('job_id')
+                    .eq('id', invitation.campaign_id)
+                    .single();
+
+                if (campaignError) throw campaignError;
+
+                // Create campaign application
+                const { error: appError } = await supabase
+                    .from('campaign_applications')
+                    .insert({
+                        campaign_id: invitation.campaign_id,
+                        candidate_id: invitation.candidate_id,
+                        job_id: campaign.job_id,
+                        status: 'pending',
+                        current_round: 0,
+                    });
+
+                if (appError) throw appError;
+            }
+        }
+
+        await getInvitations({ candidate_id: invitation.candidate_id });
+    };
+
+    /**
+     * Search candidates by skills, experience, location, and role
+     * Validates: Requirements 7.1, 7.2
+     */
+    const searchCandidates = async (filters: CandidateSearchFilters): Promise<Candidate[]> => {
+        setLoading(true);
+
+        // Requirement 7.1: Search by skills, experience, location, role
+        let query = supabase
+            .from('profiles')
+            .select('*')
+            .eq('role', 'candidate')
+            .or('open_to_work.is.null,open_to_work.eq.true');
+
+        // Filter by location
+        if (filters.location) {
+            query = query.ilike('location', `%${filters.location}%`);
+        }
+
+        // Filter by role/headline
+        if (filters.role) {
+            query = query.ilike('headline', `%${filters.role}%`);
+        }
+
+        const { data, error } = await query;
+
+        if (error) {
+            console.error('Error searching candidates:', error);
+            setLoading(false);
+            throw error;
+        }
+
+        // Filter by skills and experience in memory (since JSONB array filtering is complex)
+        let filteredCandidates = data;
+
+        // Filter by skills
+        if (filters.skills && filters.skills.length > 0) {
+            filteredCandidates = filteredCandidates.filter((candidate: any) => {
+                const candidateSkills = candidate.skills || [];
+                return filters.skills!.some(skill =>
+                    candidateSkills.some((cs: string) =>
+                        cs.toLowerCase().includes(skill.toLowerCase())
+                    )
+                );
+            });
+        }
+
+        // Filter by experience
+        if (filters.min_experience !== undefined) {
+            filteredCandidates = filteredCandidates.filter((candidate: any) => {
+                const exp = candidate.experience_years || 0;
+                return exp >= filters.min_experience!;
+            });
+        }
+
+        if (filters.max_experience !== undefined) {
+            filteredCandidates = filteredCandidates.filter((candidate: any) => {
+                const exp = candidate.experience_years || 0;
+                return exp <= filters.max_experience!;
+            });
+        }
+
+        // Fetch employer's jobs to calculate match scores (Requirement 7.2)
+        const { data: { user } } = await supabase.auth.getUser();
+        const { data: jobsData } = user
+            ? await supabase.from('jobs').select('*').eq('employer_id', user.id).eq('is_active', true)
+            : { data: [] };
+
+        // Requirement 7.2: Map to Candidate format with match scores
+        const mappedCandidates: Candidate[] = filteredCandidates.map((p: any) => {
+            let bestScore = 0;
+            let bestDetails: { label: string; type: 'success' | 'warning' | 'neutral' }[] = [];
+            let bestJobTitle: string | undefined;
+
+            if (jobsData && jobsData.length > 0) {
+                const results = jobsData.map((job: any) => ({ job, ...calculateJobMatch(job, p) }));
+                const best = results.reduce((a: any, b: any) => b.score > a.score ? b : a, results[0]);
+                bestScore = Math.round(best.score);
+                bestDetails = best.details || [];
+                bestJobTitle = best.job?.title;
+            }
+
+            return {
+                id: p.id,
+                full_name: p.full_name || 'Unknown',
+                role: p.headline || 'Candidate',
+                headline: p.headline,
+                match_score: bestScore,
+                match_details: bestDetails,
+                best_job_title: bestJobTitle,
+                skills: p.skills || [],
+                location: p.location || 'Remote',
+                experience: p.experience_years || 0,
+                resume_url: p.resume_url,
+                avatar_url: p.avatar_url,
+                cover_url: p.cover_url,
+                email: p.email,
+                bio: p.about || p.bio,
+                work_experience: p.experience || p.work_experience || [],
+                education_history: p.education || p.education_history || [],
+            };
+        });
+
+        setLoading(false);
+        return mappedCandidates;
+    };
+
+    return {
+        invitations,
+        loading,
+        getInvitations,
+        createInvitation,
+        respondToInvitation,
+        searchCandidates,
+    };
 }

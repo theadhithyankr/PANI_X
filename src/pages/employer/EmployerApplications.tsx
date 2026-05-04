@@ -18,6 +18,11 @@ interface ExtendedApplication extends Application {
     blindHiring?: boolean;
 }
 
+const scoreStyle = (score: number) =>
+    score >= 70 ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/30'
+    : score >= 40 ? 'bg-amber-400/10 text-amber-400 border-amber-400/30'
+    : 'bg-rose-400/10 text-rose-400 border-rose-400/30';
+
 const STATUS_STYLES: Record<string, string> = {
     accepted: 'bg-emerald-400/10 text-emerald-400 border-emerald-400/30',
     rejected: 'bg-rose-400/10 text-rose-400 border-rose-400/30',
@@ -37,8 +42,6 @@ export default function EmployerApplications() {
     const [page, setPage] = useState(1);
     const PAGE_SIZE = 15;
     const { setPageContext, clearPageContext } = usePageContext();
-
-    const toast = useToast();
 
     const filtered = useMemo(() => {
         const q = search.toLowerCase();
@@ -64,7 +67,7 @@ export default function EmployerApplications() {
                 jobs!inner (*),
                 profiles!candidate_id (
                     full_name, email, skills, experience_years,
-                    location, headline, role, resume_url
+                    location, headline, role, resume_url, experience, work_experience
                 )
             `)
             .eq('jobs.employer_id', user.id)
@@ -228,7 +231,7 @@ ${list}`,
                                                 </td>
                                                 <td className="px-4 py-3 text-muted-foreground">{app.role}</td>
                                                 <td className="px-4 py-3 text-muted-foreground">{app.date}</td>
-                                                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${app.matchScore && app.matchScore > 80 ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/30' : 'bg-muted/40 text-muted-foreground border-border'}`}>{app.matchScore}%</span></td>
+                                                <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${scoreStyle(app.matchScore ?? 0)}`}>{app.matchScore}%</span></td>
                                                 <td className="px-4 py-3"><span className={`px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${STATUS_STYLES[app.status] || STATUS_STYLES.pending}`}>{app.status}</span></td>
                                                 <td className="px-4 py-3 text-right">
                                                     <button onClick={() => { setSelectedApp(app); setDialogOpen(true); }} className="p-1.5 rounded-md hover:bg-muted/40 text-muted-foreground hover:text-foreground transition-colors">
@@ -272,7 +275,7 @@ ${list}`,
                                         </div>
                                         <div className="flex items-center gap-2 mt-3 flex-wrap">
                                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border capitalize ${STATUS_STYLES[app.status] || STATUS_STYLES.pending}`}>{app.status}</span>
-                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${app.matchScore && app.matchScore > 80 ? 'bg-emerald-400/10 text-emerald-400 border-emerald-400/30' : 'bg-muted/40 text-muted-foreground border-border'}`}>{app.matchScore}% match</span>
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${scoreStyle(app.matchScore ?? 0)}`}>{app.matchScore}% match</span>
                                             <span className="text-xs text-muted-foreground ml-auto">{app.date}</span>
                                         </div>
                                     </CardContent>
