@@ -207,6 +207,8 @@ export function calculateJobMatch(job: any, profile: any) {
     if (!profile) return { score: 10, reason: "Complete your profile to get matches.", details: [] };
 
     let score = 0;
+    let roleScore = 0;
+    let skillScore = 0;
     const details: { label: string; type: 'success' | 'warning' | 'neutral'; score?: string; category?: 'role' | 'skills' | 'experience' | 'location' }[] = [];
 
     // 0. Keyword/Role Match (CRITICAL - 30 pts)
@@ -220,7 +222,8 @@ export function calculateJobMatch(job: any, profile: any) {
     const titleMatches = jobTokens.filter((token: string) => profileTokens.some((pt: string) => pt.includes(token) || token.includes(pt)));
 
     if (titleMatches.length > 0) {
-        score += 30;
+        roleScore = 30;
+        score += roleScore;
         details.push({ label: `Role Match: ${job.title || job.role}`, type: 'success', score: '+30%', category: 'role' });
     }
 
@@ -235,6 +238,7 @@ export function calculateJobMatch(job: any, profile: any) {
 
         const matchRatio = matchingSkillsLc.length / jobSkills.length;
         const skillPoints = matchRatio * 40;
+        skillScore = skillPoints;
         score += skillPoints;
 
         const perSkill = matchingSkillsLc.length > 0 ? Math.round(skillPoints / matchingSkillsLc.length) : 0;
@@ -251,7 +255,7 @@ export function calculateJobMatch(job: any, profile: any) {
         if (titleMatches.length > 0) score += 10;
     }
 
-    // 2. Experience Match (20 pts)
+    // 2. Experience Match (20 pts — scaled by role+skill relevance)
     const levelMap: Record<string, number> = {
         'entry level': 0, 'junior': 1, 'mid-level': 3, 'senior': 5, 'lead': 7
     };
@@ -266,33 +270,50 @@ export function calculateJobMatch(job: any, profile: any) {
         typeof profile.experience === 'number' ? profile.experience : 0;
     const userExp = hasConfirmedWorkHistory ? storedExp : 0;
 
-    if (userExp >= jobExp) {
-        score += 20;
-        details.push({ label: `Experience Met (${userExp} yrs)`, type: 'success', score: '+20%', category: 'experience' });
-    } else if (userExp >= jobExp - 1) {
-        score += 10;
-        details.push({ label: `Experience Close (${userExp}/${jobExp} yrs)`, type: 'neutral', score: '+10%', category: 'experience' });
+    // Experience points are proportional to role+skill relevance:
+    // unrelated experience (0 role + 0 skills) contributes nothing.
+    const maxRelevance = 30 + (jobSkills.length > 0 ? 40 : 0);
+    const relevanceFraction = maxRelevance > 0 ? Math.min(1, (roleScore + skillScore) / maxRelevance) : 0;
+
+    let rawExpScore = 0;
+    if (userExp >= jobExp) rawExpScore = 20;
+    else if (userExp >= jobExp - 1) rawExpScore = 10;
+
+    const adjExpScore = Math.round(rawExpScore * relevanceFraction);
+    score += adjExpScore;
+
+    if (rawExpScore > 0) {
+        const expLabel = userExp >= jobExp
+            ? `Experience Met (${userExp} yrs)`
+            : `Experience Close (${userExp}/${jobExp} yrs)`;
+        const expType = userExp >= jobExp ? 'success' : 'neutral';
+        details.push({ label: expLabel, type: expType, score: `+${adjExpScore}%`, category: 'experience' });
     } else {
         details.push({ label: `Experience Gap (${userExp} vs ${jobExp} yrs)`, type: 'warning', score: '0%', category: 'experience' });
     }
 
-    // 3. Location (10 pts)
-    let locationScore = 0;
+    // 3. Location (10 pts — scaled by role+skill relevance)
+    let rawLocationScore = 0;
+    let locationLabel = '';
     if (job.location && profile.location) {
         const jobLoc = job.location.toLowerCase();
         const userLoc = profile.location.toLowerCase();
         if (jobLoc.includes(userLoc) || userLoc.includes(jobLoc)) {
-            locationScore = 10;
-            details.push({ label: "Location Match", type: 'success', score: '+10%', category: 'location' });
+            rawLocationScore = 10;
+            locationLabel = 'Location Match';
         }
     }
     if (job.work_mode === 'Remote' || (job.location && job.location.toLowerCase().includes('remote'))) {
-        if (locationScore < 10) {
-            locationScore = 10;
-            details.push({ label: "Remote Friendly", type: 'success', score: '+10%', category: 'location' });
+        if (rawLocationScore < 10) {
+            rawLocationScore = 10;
+            locationLabel = 'Remote Friendly';
         }
     }
-    score += locationScore;
+    if (rawLocationScore > 0) {
+        const adjLocationScore = Math.round(rawLocationScore * relevanceFraction);
+        score += adjLocationScore;
+        details.push({ label: locationLabel, type: 'success', score: `+${adjLocationScore}%`, category: 'location' });
+    }
 
     if (titleMatches.length === 0 && score < 40) score = Math.min(score, 25);
     score = Math.min(98, Math.floor(score));
