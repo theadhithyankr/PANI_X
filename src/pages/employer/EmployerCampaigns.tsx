@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import EmployerLayout from '../../components/employer/EmployerLayout';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Plus, MoreVertical, Pencil, Trash2, BarChart3, Loader2, Calendar, Users, Briefcase, Filter, Zap } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, BarChart3, Loader2, Calendar, Users, Briefcase, Filter, Zap, GitBranch } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useSupabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -92,19 +92,18 @@ export default function EmployerCampaigns() {
         <EmployerLayout>
             <div className="flex flex-col gap-6">
                 {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    <div className="hidden md:block">
-                        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Campaigns</h1>
-                        <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                <div className="flex items-center justify-between gap-3">
+                    <div>
+                        <h1 className="text-xl sm:text-3xl font-bold text-foreground">My Campaigns</h1>
+                        <p className="hidden sm:block text-muted-foreground mt-1 text-sm">
                             Manage your hiring campaigns and track candidate progress.
                         </p>
                     </div>
-                    <div className="flex gap-2 shrink-0">
-                        <Button className="gap-2 text-sm" onClick={() => setCreateModalOpen(true)}>
-                            <Plus className="h-4 w-4" />
-                            Create Campaign
-                        </Button>
-                    </div>
+                    <Button className="gap-2 text-sm shrink-0" onClick={() => setCreateModalOpen(true)}>
+                        <Plus className="h-4 w-4" />
+                        <span className="hidden sm:inline">Create Campaign</span>
+                        <span className="sm:hidden">New</span>
+                    </Button>
                 </div>
 
                 {/* Filters */}
@@ -236,9 +235,9 @@ export default function EmployerCampaigns() {
                                                                     Activate
                                                                 </DropdownMenuItem>
                                                             )}
-                                                            <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
-                                                                <Pencil className="h-3.5 w-3.5" />
-                                                                Edit Campaign
+                                                            <DropdownMenuItem onClick={() => { setSelectedCampaign(campaign); setPipelineOpen(true); }}>
+                                                                <GitBranch className="h-3.5 w-3.5" />
+                                                                Build Pipeline
                                                             </DropdownMenuItem>
                                                             <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
                                                                 <BarChart3 className="h-3.5 w-3.5" />
@@ -315,9 +314,9 @@ export default function EmployerCampaigns() {
                                                         Activate
                                                     </DropdownMenuItem>
                                                 )}
-                                                <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                    Edit Campaign
+                                                <DropdownMenuItem onClick={() => { setSelectedCampaign(campaign); setPipelineOpen(true); }}>
+                                                    <GitBranch className="h-3.5 w-3.5" />
+                                                    Build Pipeline
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
                                                     <BarChart3 className="h-3.5 w-3.5" />

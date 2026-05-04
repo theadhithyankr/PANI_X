@@ -1,9 +1,10 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, Briefcase, FileText, Users } from 'lucide-react';
+import { LayoutDashboard, Briefcase, FileText, Users, Calendar } from 'lucide-react';
 
 const TABS = [
     { text: 'Dashboard',    icon: LayoutDashboard, path: '/employer' },
-    { text: 'My Jobs',      icon: Briefcase,       path: '/employer/jobs' },
+    { text: 'Jobs',         icon: Briefcase,       path: '/employer/jobs' },
+    { text: 'Campaigns',    icon: Calendar,        path: '/employer/campaigns' },
     { text: 'Applications', icon: FileText,        path: '/employer/applications' },
     { text: 'Candidates',   icon: Users,           path: '/employer/candidates' },
 ];

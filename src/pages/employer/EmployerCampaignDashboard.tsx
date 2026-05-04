@@ -325,7 +325,7 @@ export default function EmployerCampaignDashboard() {
                                     onValueChange={(v) => handleChangeStatus(v as 'draft' | 'active' | 'completed')}
                                     disabled={updatingStatus}
                                 >
-                                    <SelectTrigger className="w-36 h-9 text-sm">
+                                    <SelectTrigger className="w-full sm:w-36 h-9 text-sm">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
