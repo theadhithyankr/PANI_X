@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import EmployerLayout from '../../components/employer/EmployerLayout';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
-import { Plus, MoreVertical, Pencil, Trash2, BarChart3, Loader2, Calendar, Users, Briefcase, Filter } from 'lucide-react';
+import { Plus, MoreVertical, Pencil, Trash2, BarChart3, Loader2, Calendar, Users, Briefcase, Filter, Zap } from 'lucide-react';
 import { useCampaigns } from '../../hooks/useSupabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -15,7 +15,7 @@ import PipelineBuilderModal from '../../components/employer/PipelineBuilderModal
 
 export default function EmployerCampaigns() {
     const { user } = useAuth();
-    const { campaigns, loading, getCampaigns, deleteCampaign } = useCampaigns();
+    const { campaigns, loading, getCampaigns, deleteCampaign, updateCampaign } = useCampaigns();
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -37,6 +37,16 @@ export default function EmployerCampaigns() {
         if (statusFilter === 'all') return true;
         return campaign.status === statusFilter;
     });
+
+    const handleActivate = async (campaign: Campaign) => {
+        try {
+            await updateCampaign(campaign.id, { status: 'active' });
+            toast('Campaign activated! Candidates can now discover and apply.', 'success');
+            if (user?.id) getCampaigns({ employer_id: user.id });
+        } catch (error: any) {
+            toast(error?.message || 'Failed to activate campaign', 'error');
+        }
+    };
 
     const handleDelete = async (campaign: Campaign) => {
         setDeleteTarget(campaign);
@@ -217,6 +227,15 @@ export default function EmployerCampaigns() {
                                                             </button>
                                                         </DropdownMenuTrigger>
                                                         <DropdownMenuContent align="end" sideOffset={8} className="w-44">
+                                                            {campaign.status === 'draft' && (
+                                                                <DropdownMenuItem
+                                                                    onClick={() => handleActivate(campaign)}
+                                                                    className="text-emerald-400 focus:text-emerald-400"
+                                                                >
+                                                                    <Zap className="h-3.5 w-3.5" />
+                                                                    Activate
+                                                                </DropdownMenuItem>
+                                                            )}
                                                             <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
                                                                 <Pencil className="h-3.5 w-3.5" />
                                                                 Edit Campaign
@@ -287,6 +306,15 @@ export default function EmployerCampaigns() {
                                                 </button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" sideOffset={8} className="w-44">
+                                                {campaign.status === 'draft' && (
+                                                    <DropdownMenuItem
+                                                        onClick={() => handleActivate(campaign)}
+                                                        className="text-emerald-400 focus:text-emerald-400"
+                                                    >
+                                                        <Zap className="h-3.5 w-3.5" />
+                                                        Activate
+                                                    </DropdownMenuItem>
+                                                )}
                                                 <DropdownMenuItem onClick={() => navigate(`/employer/campaigns/${campaign.id}`)}>
                                                     <Pencil className="h-3.5 w-3.5" />
                                                     Edit Campaign
@@ -363,12 +391,17 @@ export default function EmployerCampaigns() {
                     setCreateModalOpen(false);
                     setSelectedCampaign(c);
                     setPipelineOpen(true);
+                    // Re-fetch in THIS component's hook instance (modal has its own instance)
+                    if (user?.id) getCampaigns({ employer_id: user.id });
                 }}
             />
 
             <PipelineBuilderModal
                 open={pipelineOpen}
-                onClose={() => setPipelineOpen(false)}
+                onClose={() => {
+                    setPipelineOpen(false);
+                    if (user?.id) getCampaigns({ employer_id: user.id });
+                }}
                 campaign={selectedCampaign}
             />
         </EmployerLayout>

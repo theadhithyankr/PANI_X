@@ -56,6 +56,8 @@ export default function PipelineBuilderModal({ open, onClose, campaign }: Pipeli
 
     const [saving, setSaving] = useState(false);
     const [showOverride, setShowOverride] = useState(false);
+    const [showActivatePrompt, setShowActivatePrompt] = useState(false);
+    const [activating, setActivating] = useState(false);
 
     // Track effective campaign dates locally (normalized to yyyy-mm-dd)
     const [localStart, setLocalStart] = useState(toDateStr(campaign?.start_date));
@@ -273,8 +275,13 @@ export default function PipelineBuilderModal({ open, onClose, campaign }: Pipeli
                     min_passing_score: r.min_passing_score,
                 });
             }
-            toast('Pipeline saved successfully!', 'success');
-            onClose();
+            // If campaign is still draft, prompt to activate
+            if (campaign.status === 'draft') {
+                setShowActivatePrompt(true);
+            } else {
+                toast('Pipeline saved successfully!', 'success');
+                onClose();
+            }
         } catch (error: any) {
             toast(error?.message || 'Failed to save pipeline', 'error');
         } finally {
@@ -282,9 +289,23 @@ export default function PipelineBuilderModal({ open, onClose, campaign }: Pipeli
         }
     };
 
+    const handleActivate = async () => {
+        setActivating(true);
+        try {
+            await updateCampaign(campaign.id, { status: 'active' });
+            toast('Campaign activated! Candidates can now discover and apply.', 'success');
+        } catch {
+            toast('Pipeline saved. You can activate the campaign from the campaigns list.', 'success');
+        } finally {
+            setActivating(false);
+            autoGenerateRef.current = null;
+            onClose();
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-            <div className="bg-card border border-border/60 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="relative bg-card border border-border/60 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between px-6 py-4 border-b border-border/60 shrink-0">
                     <div>
                         <h2 className="text-lg font-semibold text-foreground">Build Pipeline</h2>
@@ -565,8 +586,8 @@ export default function PipelineBuilderModal({ open, onClose, campaign }: Pipeli
                                                             type="number"
                                                             min={0}
                                                             max={100}
-                                                            value={round.min_passing_score}
-                                                            onChange={(e) => updateManualRound(index, 'min_passing_score', Number(e.target.value))}
+                                                            value={round.min_passing_score || ''}
+                                                            onChange={(e) => updateManualRound(index, 'min_passing_score', e.target.value === '' ? 0 : Math.min(100, Math.max(0, Number(e.target.value))))}
                                                         />
                                                     </div>
                                                 </div>
@@ -632,6 +653,40 @@ export default function PipelineBuilderModal({ open, onClose, campaign }: Pipeli
                     </Button>
                 </div>
             </div>
+
+            {/* Activate campaign prompt — shown after pipeline save */}
+            {showActivatePrompt && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 backdrop-blur-sm rounded-2xl">
+                    <div className="bg-card border border-border/60 rounded-2xl shadow-2xl p-6 mx-4 w-full max-w-sm flex flex-col gap-4">
+                        <div className="flex flex-col gap-1">
+                            <h3 className="text-base font-semibold text-foreground">Pipeline saved!</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Activate the campaign now so candidates can discover and apply to it. You can also activate it later from the campaigns list.
+                            </p>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                variant="ghost"
+                                className="flex-1"
+                                disabled={activating}
+                                onClick={() => { autoGenerateRef.current = null; onClose(); }}
+                            >
+                                Later
+                            </Button>
+                            <Button
+                                className="flex-1 gap-2"
+                                disabled={activating}
+                                onClick={handleActivate}
+                            >
+                                {activating
+                                    ? <><Loader2 className="h-4 w-4 animate-spin" />Activating…</>
+                                    : 'Activate Campaign'
+                                }
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

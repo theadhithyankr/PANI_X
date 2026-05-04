@@ -6,7 +6,7 @@ export interface GeneratedCampaignSettings {
     endDate: string;
     visibility: 'public' | 'invite-only';
     minMatchingScore: number;
-    requiredSkills: Array<{ skill: string; proficiency: string }>;
+    requiredSkills: Array<{ name: string; proficiency: string }>;
     minExperience: number;
     maxExperience: number;
     educationRequirements: string[];
@@ -89,7 +89,9 @@ Return ONLY valid JSON, no extra text.`;
         visibility: parsed.visibility === 'invite-only' ? 'invite-only' : 'public',
         minMatchingScore: clamp(Number(parsed.minMatchingScore), 0, 100),
         requiredSkills: Array.isArray(parsed.requiredSkills)
-            ? parsed.requiredSkills.filter((s: any) => s?.skill && VALID_PROFICIENCY.includes(s?.proficiency))
+            ? parsed.requiredSkills
+                .filter((s: any) => (s?.name || s?.skill) && VALID_PROFICIENCY.includes(s?.proficiency))
+                .map((s: any) => ({ name: s.name || s.skill, proficiency: s.proficiency }))
             : [],
         minExperience: minExp,
         maxExperience: Math.max(maxExp, minExp),

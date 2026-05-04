@@ -99,9 +99,11 @@ function checkRequiredSkills(
     const missingSkills: RequiredSkill[] = [];
 
     for (const required of requiredSkills) {
-        const normalizedRequired = required.name.toLowerCase().trim();
-        if (!normalizedCandidateSkills.includes(normalizedRequired)) {
-            missingSkills.push(required);
+        // Handle both { name } (RequiredSkill) and legacy { skill } stored by CampaignCreationModal
+        const skillName: string = required.name || (required as any).skill || '';
+        const normalizedRequired = skillName.toLowerCase().trim();
+        if (normalizedRequired && !normalizedCandidateSkills.includes(normalizedRequired)) {
+            missingSkills.push({ ...required, name: skillName });
         }
     }
 

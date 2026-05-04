@@ -51,7 +51,7 @@ export default function CampaignCreationModal({ open, onClose, onSuccess }: Camp
     const [endDate, setEndDate] = useState('');
     const [visibility, setVisibility] = useState<'public' | 'invite-only'>('public');
     const [minMatchingScore, setMinMatchingScore] = useState(0);
-    const [requiredSkills, setRequiredSkills] = useState<Array<{ skill: string; proficiency: string }>>([]);
+    const [requiredSkills, setRequiredSkills] = useState<Array<{ name: string; proficiency: string }>>([]);
     const [skillInput, setSkillInput] = useState('');
     const [skillProficiency, setSkillProficiency] = useState('intermediate');
     const [minExperience, setMinExperience] = useState(0);
@@ -96,14 +96,14 @@ export default function CampaignCreationModal({ open, onClose, onSuccess }: Camp
 
     const handleAddSkill = () => {
         const s = skillInput.trim();
-        if (s && !requiredSkills.some(r => r.skill.toLowerCase() === s.toLowerCase())) {
-            setRequiredSkills([...requiredSkills, { skill: s, proficiency: skillProficiency }]);
+        if (s && !requiredSkills.some(r => r.name.toLowerCase() === s.toLowerCase())) {
+            setRequiredSkills([...requiredSkills, { name: s, proficiency: skillProficiency }]);
             setSkillInput('');
             setSkillProficiency('intermediate');
         }
     };
 
-    const handleRemoveSkill = (skill: string) => setRequiredSkills(requiredSkills.filter(s => s.skill !== skill));
+    const handleRemoveSkill = (skill: string) => setRequiredSkills(requiredSkills.filter(s => s.name !== skill));
 
     const handleToggleEducation = (level: string) =>
         setEducationRequirements(prev =>
@@ -434,11 +434,11 @@ export default function CampaignCreationModal({ open, onClose, onSuccess }: Camp
                                         {requiredSkills.length > 0 && (
                                             <div className="flex flex-wrap gap-2">
                                                 {requiredSkills.map(s => (
-                                                    <div key={s.skill} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-sm">
+                                                    <div key={s.name} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/20 text-sm">
                                                         <Award className="h-3.5 w-3.5 text-primary" />
-                                                        <span className="text-foreground font-medium">{s.skill}</span>
+                                                        <span className="text-foreground font-medium">{s.name}</span>
                                                         <span className="text-xs text-muted-foreground">({s.proficiency})</span>
-                                                        <button type="button" onClick={() => handleRemoveSkill(s.skill)} disabled={submitting} className="ml-1 text-muted-foreground hover:text-foreground">
+                                                        <button type="button" onClick={() => handleRemoveSkill(s.name)} disabled={submitting} className="ml-1 text-muted-foreground hover:text-foreground">
                                                             <X className="h-3.5 w-3.5" />
                                                         </button>
                                                     </div>

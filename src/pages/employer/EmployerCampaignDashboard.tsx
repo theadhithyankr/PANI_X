@@ -45,14 +45,14 @@ function CandidateReviewModal({ open, onClose, application, campaign, onSuccess 
     const { createResult } = useCampaignRoundResults();
     const toast = useToast();
 
-    const [score, setScore] = useState<number>(0);
+    const [score, setScore] = useState<number | ''>('');
     const [resultStatus, setResultStatus] = useState<'passed' | 'failed'>('passed');
     const [feedback, setFeedback] = useState('');
     const [submitting, setSubmitting] = useState(false);
 
     useEffect(() => {
         if (open) {
-            setScore(0);
+            setScore('');
             setResultStatus('passed');
             setFeedback('');
         }
@@ -72,7 +72,7 @@ function CandidateReviewModal({ open, onClose, application, campaign, onSuccess 
         setSubmitting(true);
         try {
             await createResult(application.id, currentRound.id, {
-                score,
+                score: typeof score === 'number' ? score : 0,
                 status: resultStatus,
                 feedback,
             });
@@ -107,7 +107,7 @@ function CandidateReviewModal({ open, onClose, application, campaign, onSuccess 
                             min={0}
                             max={100}
                             value={score}
-                            onChange={(e) => setScore(Number(e.target.value))}
+                            onChange={(e) => setScore(e.target.value === '' ? '' : Math.min(100, Math.max(0, Number(e.target.value))))}
                             disabled={submitting}
                         />
                     </div>

@@ -779,7 +779,7 @@ export default function Profile() {
                     <Input value={editForm.location || ''} onChange={e => setEditForm({ ...editForm, location: e.target.value })} />
                 </FieldGroup>
                 <FieldGroup label="Experience (years)">
-                    <Input type="number" min={0} value={editForm.experience_years ?? ''} onChange={e => setEditForm({ ...editForm, experience_years: Number(e.target.value) })} />
+                    <Input type="number" min={0} value={editForm.experience_years ?? ''} onChange={e => setEditForm({ ...editForm, experience_years: e.target.value === '' ? null : Number(e.target.value) })} />
                 </FieldGroup>
                 <FieldGroup label="Skills (comma separated)">
                     <Input

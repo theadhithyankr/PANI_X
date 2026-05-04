@@ -373,7 +373,7 @@ export default function EmployerJobs() {
                     </div>
                     <div className="space-y-2">
                         <Label>Number of Openings</Label>
-                        <Input type="number" value={jobData.openings} onChange={(e) => setJobData({ ...jobData, openings: Number(e.target.value) })} />
+                        <Input type="number" value={jobData.openings || ''} onChange={(e) => setJobData({ ...jobData, openings: e.target.value === '' ? 0 : Number(e.target.value) })} />
                     </div>
                     <div className="md:col-span-2">
                         <label className="flex items-start gap-3 cursor-pointer group">

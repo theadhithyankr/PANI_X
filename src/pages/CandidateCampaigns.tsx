@@ -3,7 +3,7 @@ import DashboardLayout from '../layout/DashboardLayout';
 import { Card, CardContent } from '../components/ui/card';
 import {
     Calendar, Loader2,
-    ChevronRight, Trophy, X, CheckCircle2, XCircle,
+    ChevronRight, Trophy, X, CheckCircle2, XCircle, MinusCircle,
 } from 'lucide-react';
 import {
     useCampaigns,
@@ -15,6 +15,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import type { Campaign } from '../hooks/useSupabase';
 import { checkEligibility } from '../utils/eligibilityChecker';
+import { calculateJobMatch } from '../utils/ai';
 
 const FILTER_TABS = ['All', 'Eligible', 'Invited'] as const;
 type FilterTab = typeof FILTER_TABS[number];
@@ -57,24 +58,23 @@ function CampaignDetailsModal({
 
     if (!open || !campaign) return null;
 
-    const eligibility = checkEligibility(profile || { id: user?.id || '' }, campaign, 0);
+    const matchResult = campaign.job && profile
+        ? calculateJobMatch(campaign.job, profile)
+        : { score: 0, details: [] as { label: string; type: 'success' | 'warning' | 'neutral'; score?: string; category?: string }[] };
+
+    const eligibility = checkEligibility(
+        profile || { id: user?.id || '' },
+        campaign,
+        matchResult.score,
+    );
+
+    // Invited candidates can always apply regardless of eligibility
+    const canApply = eligibility.eligible || isInvited;
+
     const rounds = campaign.rounds ?? [];
 
-    const metCriteria: string[] = [];
-    if (!campaign.min_experience || (profile?.experience_years ?? 0) >= campaign.min_experience) {
-        if (campaign.min_experience) metCriteria.push(`Experience: ${profile?.experience_years ?? 0} yrs (min ${campaign.min_experience})`);
-    }
-    if (!campaign.required_skills || campaign.required_skills.length === 0) {
-        metCriteria.push('No required skills constraint');
-    } else {
-        const candidateSkills: string[] = (profile?.skills ?? []).map((s: string) => s.toLowerCase());
-        const met = (campaign.required_skills as { name: string }[]).filter(
-            s => candidateSkills.includes(s.name.toLowerCase())
-        );
-        if (met.length > 0) {
-            metCriteria.push(`Skills matched: ${met.map(s => s.name).join(', ')}`);
-        }
-    }
+    // Campaign-specific unmet criteria excluding score (score is shown via matchResult bar)
+    const campaignUnmet = eligibility.unmetCriteria.filter(c => c.type !== 'matching_score');
 
     const handleApply = async () => {
         if (!campaign) return;
@@ -156,11 +156,14 @@ function CampaignDetailsModal({
                                 <div className="bg-muted/20 rounded-xl p-3 border border-border/60 sm:col-span-2">
                                     <p className="text-xs text-muted-foreground mb-1.5">Required Skills</p>
                                     <div className="flex flex-wrap gap-1.5">
-                                        {(campaign.required_skills as { name: string; proficiency: string }[]).map(s => (
-                                            <span key={s.name} className="px-2 py-0.5 text-xs rounded-full bg-violet-400/10 text-violet-400 border border-violet-400/20 font-medium">
-                                                {s.name} · {s.proficiency}
-                                            </span>
-                                        ))}
+                                        {(campaign.required_skills as any[]).map((s, i) => {
+                                            const skillName = s.name || s.skill || '';
+                                            return (
+                                                <span key={i} className="px-2 py-0.5 text-xs rounded-full bg-violet-400/10 text-violet-400 border border-violet-400/20 font-medium">
+                                                    {skillName} · {s.proficiency}
+                                                </span>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -212,33 +215,103 @@ function CampaignDetailsModal({
                         </div>
                     )}
 
-                    {/* Eligibility Breakdown */}
+                    {/* Match Score */}
                     <div>
-                        <h3 className="text-sm font-semibold text-foreground mb-3">Your Eligibility</h3>
-                        <div className="flex flex-col gap-2">
-                            {eligibility.unmetCriteria.map((c, i) => (
-                                <div key={i} className="flex items-start gap-2 text-sm text-rose-400">
-                                    <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                                    <span>{c.message}</span>
-                                </div>
-                            ))}
-                            {metCriteria.map((c, i) => (
-                                <div key={i} className="flex items-start gap-2 text-sm text-emerald-400">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0 mt-0.5" />
-                                    <span>{c}</span>
-                                </div>
-                            ))}
-                            {eligibility.eligible && eligibility.unmetCriteria.length === 0 && metCriteria.length === 0 && (
-                                <div className="flex items-center gap-2 text-sm text-emerald-400">
-                                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                                    <span>You meet all eligibility criteria</span>
-                                </div>
-                            )}
+                        <div className="flex items-center justify-between mb-2">
+                            <h3 className="text-sm font-semibold text-foreground">Your Match Score</h3>
+                            <span className={`text-lg font-bold ${
+                                matchResult.score >= (campaign.min_matching_score || 0)
+                                    ? 'text-emerald-400'
+                                    : 'text-rose-400'
+                            }`}>
+                                {matchResult.score}%
+                            </span>
                         </div>
+                        <div className="w-full bg-muted/40 rounded-full h-2 mb-1">
+                            <div
+                                className={`h-2 rounded-full transition-all duration-500 ${
+                                    matchResult.score >= (campaign.min_matching_score || 0)
+                                        ? 'bg-emerald-400'
+                                        : 'bg-rose-400'
+                                }`}
+                                style={{ width: `${Math.min(matchResult.score, 100)}%` }}
+                            />
+                        </div>
+                        {campaign.min_matching_score !== undefined && campaign.min_matching_score > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                Minimum required: {campaign.min_matching_score}%
+                                {matchResult.score >= campaign.min_matching_score
+                                    ? ' — you qualify'
+                                    : ` — you need ${campaign.min_matching_score - matchResult.score}% more`}
+                            </p>
+                        )}
                     </div>
 
-                    {/* Invited note */}
-                    {campaign.visibility === 'invite-only' && isInvited && (
+                    {/* Match Breakdown */}
+                    {matchResult.details.length > 0 && (
+                        <div>
+                            <h3 className="text-sm font-semibold text-foreground mb-3">What You Have / Missing</h3>
+                            <div className="flex flex-col gap-1.5">
+                                {matchResult.details.map((d, i) => (
+                                    <div
+                                        key={i}
+                                        className={`flex items-center gap-2 text-sm ${
+                                            d.type === 'success'
+                                                ? 'text-emerald-400'
+                                                : d.type === 'warning'
+                                                ? 'text-rose-400'
+                                                : 'text-amber-400'
+                                        }`}
+                                    >
+                                        {d.type === 'success' ? (
+                                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                        ) : d.type === 'warning' ? (
+                                            <XCircle className="h-4 w-4 shrink-0" />
+                                        ) : (
+                                            <MinusCircle className="h-4 w-4 shrink-0" />
+                                        )}
+                                        <span className="flex-1">{d.label}</span>
+                                        {d.score && (
+                                            <span className="text-xs opacity-60 font-medium">{d.score}</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Campaign-specific unmet criteria (experience range, education, required skills) */}
+                    {campaignUnmet.length > 0 && (
+                        <div>
+                            <h3 className="text-sm font-semibold text-foreground mb-3">Campaign Requirements Not Met</h3>
+                            <div className="flex flex-col gap-1.5">
+                                {campaignUnmet.map((c, i) => (
+                                    <div key={i} className="flex items-start gap-2 text-sm text-rose-400">
+                                        <XCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                                        <span>{c.message}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* All criteria met */}
+                    {eligibility.eligible && matchResult.details.length === 0 && campaignUnmet.length === 0 && (
+                        <div className="flex items-center gap-2 text-sm text-emerald-400">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>You meet all eligibility criteria</span>
+                        </div>
+                    )}
+
+                    {/* Invited override notice */}
+                    {isInvited && !eligibility.eligible && (
+                        <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl p-3 text-sm text-amber-400">
+                            You were personally invited by the employer — you can apply even if you don't fully meet the listed criteria.
+                        </div>
+                    )}
+
+                    {/* Invited note (eligible) */}
+                    {campaign.visibility === 'invite-only' && isInvited && eligibility.eligible && (
                         <div className="bg-amber-400/10 border border-amber-400/20 rounded-xl p-3 text-sm text-amber-400">
                             You have been personally invited to this campaign by the employer.
                         </div>
@@ -260,7 +333,7 @@ function CampaignDetailsModal({
                         >
                             Already Applied
                         </button>
-                    ) : !eligibility.eligible ? (
+                    ) : !canApply ? (
                         <button
                             disabled
                             className="px-5 py-2 text-sm font-semibold rounded-xl bg-muted/40 text-muted-foreground border border-border cursor-not-allowed"
@@ -274,7 +347,7 @@ function CampaignDetailsModal({
                             className="flex items-center gap-2 px-5 py-2 text-sm font-semibold rounded-xl bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-60"
                         >
                             {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
-                            Apply Now
+                            {isInvited && !eligibility.eligible ? 'Apply (Invited)' : 'Apply Now'}
                         </button>
                     )}
                 </div>
@@ -320,11 +393,15 @@ export default function CandidateCampaigns() {
 
     const appliedCampaignIds = new Set(applications.map(a => a.campaign_id));
 
-    const getEligibility = (campaign: Campaign) =>
-        checkEligibility(profile || { id: user?.id || '' }, campaign, 0);
+    const getEligibility = (campaign: Campaign) => {
+        const matchScore = campaign.job && profile
+            ? calculateJobMatch(campaign.job, profile).score
+            : 0;
+        return checkEligibility(profile || { id: user?.id || '' }, campaign, matchScore);
+    };
 
     const filteredCampaigns = allCampaigns.filter(c => {
-        if (filterTab === 'Eligible') return getEligibility(c).eligible;
+        if (filterTab === 'Eligible') return getEligibility(c).eligible || invitedCampaignIds.has(c.id);
         if (filterTab === 'Invited') return invitedCampaignIds.has(c.id);
         return true;
     });
@@ -389,6 +466,9 @@ export default function CandidateCampaigns() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                         {filteredCampaigns.map(campaign => {
                             const eligibility = getEligibility(campaign);
+                            const matchScore = campaign.job && profile
+                                ? calculateJobMatch(campaign.job, profile).score
+                                : 0;
                             const applied = appliedCampaignIds.has(campaign.id);
                             const invited = invitedCampaignIds.has(campaign.id);
                             const rounds = campaign.rounds ?? [];
@@ -407,6 +487,25 @@ export default function CandidateCampaigns() {
                                             )}
                                         </div>
 
+                                        {/* Match score bar */}
+                                        {campaign.job && profile && (
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 bg-muted/40 rounded-full h-1.5">
+                                                    <div
+                                                        className={`h-1.5 rounded-full transition-all ${
+                                                            eligibility.eligible || invited ? 'bg-emerald-400' : 'bg-rose-400/70'
+                                                        }`}
+                                                        style={{ width: `${Math.min(matchScore, 100)}%` }}
+                                                    />
+                                                </div>
+                                                <span className={`text-xs font-semibold tabular-nums ${
+                                                    eligibility.eligible || invited ? 'text-emerald-400' : 'text-muted-foreground'
+                                                }`}>
+                                                    {matchScore}%
+                                                </span>
+                                            </div>
+                                        )}
+
                                         {/* Date range */}
                                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                                             <Calendar className="h-3.5 w-3.5 shrink-0" />
@@ -419,7 +518,7 @@ export default function CandidateCampaigns() {
                                                 {rounds.length} {rounds.length === 1 ? 'Round' : 'Rounds'}
                                             </span>
 
-                                            {invited && campaign.visibility === 'invite-only' && (
+                                            {invited && (
                                                 <span className="px-2 py-0.5 text-xs rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 font-medium">
                                                     Invited
                                                 </span>
@@ -429,11 +528,11 @@ export default function CandidateCampaigns() {
                                                 <span className="px-2 py-0.5 text-xs rounded-full bg-emerald-400/10 text-emerald-400 border border-emerald-400/20 font-medium">
                                                     Eligible
                                                 </span>
-                                            ) : (
+                                            ) : !invited ? (
                                                 <span className="px-2 py-0.5 text-xs rounded-full bg-rose-400/10 text-rose-400 border border-rose-400/20 font-medium">
                                                     Not Eligible
                                                 </span>
-                                            )}
+                                            ) : null}
 
                                             {applied && (
                                                 <span className="px-2 py-0.5 text-xs rounded-full bg-blue-400/10 text-blue-400 border border-blue-400/20 font-medium">
