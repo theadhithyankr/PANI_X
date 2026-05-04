@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import DashboardLayout from '../layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -131,6 +131,35 @@ export default function Profile() {
 
     // Skills raw input (avoids comma-eating bug)
     const [skillsRaw, setSkillsRaw] = useState('');
+
+    // Auto-sanitize any experience entries that have future dates already stored in DB
+    const sanitizedRef = useRef(false);
+    const clampDate = useCallback((dateStr: string | undefined) => {
+        if (!dateStr) return dateStr;
+        const lower = dateStr.toLowerCase().trim();
+        if (lower === 'present' || lower === '') return dateStr;
+        const today = new Date().getFullYear();
+        return dateStr.replace(/\b(\d{4})\b/, (_, y) => parseInt(y, 10) > today ? String(today) : y);
+    }, []);
+
+    useEffect(() => {
+        if (!profile || sanitizedRef.current) return;
+        sanitizedRef.current = true;
+        const today = new Date().getFullYear();
+        const hasFuture = (profile.experience || []).some(exp => {
+            const startY = exp.start_date?.match(/\b(\d{4})\b/)?.[1];
+            const endY = exp.end_date?.match(/\b(\d{4})\b/)?.[1];
+            return (startY && parseInt(startY) > today) || (endY && parseInt(endY) > today);
+        });
+        if (hasFuture) {
+            const cleaned = (profile.experience || []).map(exp => ({
+                ...exp,
+                start_date: clampDate(exp.start_date),
+                end_date: clampDate(exp.end_date),
+            }));
+            updateProfile({ experience: cleaned }).catch(() => {});
+        }
+    }, [profile?.id]);
 
     // Inline About editing
     const [editingAbout, setEditingAbout] = useState(false);
@@ -302,8 +331,14 @@ export default function Profile() {
         const extractYear = (s: string) => { const m = s?.match(/\b(\d{4})\b/); return m ? parseInt(m[1], 10) : null; };
         const startY = extractYear(currentExp.start_date || '');
         const endY = extractYear(currentExp.end_date || '');
-        if (startY && startY > currentYear) { toast('Start date cannot be in the future.', 'error'); return; }
-        if (endY && endY > currentYear) { toast('End date cannot be in the future.', 'error'); return; }
+        if (startY && startY > currentYear) {
+            toast(`Start date can't be a future year. Please enter ${currentYear} or earlier.`, 'error');
+            return;
+        }
+        if (endY && endY > currentYear) {
+            toast(`End date can't be a future year. Please enter ${currentYear} or earlier.`, 'error');
+            return;
+        }
         try {
             const list = [...(profile?.experience || [])];
             const idx = list.findIndex(e => e.id === currentExp.id);

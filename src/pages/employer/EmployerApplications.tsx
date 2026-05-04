@@ -64,7 +64,7 @@ export default function EmployerApplications() {
                 jobs!inner (*),
                 profiles!candidate_id (
                     full_name, email, skills, experience_years,
-                    location, headline, role, resume_url
+                    location, headline, role, resume_url, experience
                 )
             `)
             .eq('jobs.employer_id', user.id)
