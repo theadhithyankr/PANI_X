@@ -8,6 +8,7 @@ import {
     useInterviews, useCampaigns, useCampaignApplications, useCampaignInvitations,
 } from '../hooks/useSupabase';
 import { calculateJobMatch } from '../utils/ai';
+import { detectSuspiciousUsers, type SuspiciousUser } from '../utils/suspiciousUsers';
 import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
 
@@ -45,6 +46,12 @@ const SUGGESTED_EMPLOYER = [
     'What should I look for in a resume?',
 ];
 
+const SUGGESTED_ADMIN = [
+    'How many jobs are pending review?',
+    'Give me a platform overview',
+    'What should I moderate first?',
+];
+
 export default function AIAssistant() {
     const { user } = useAuth();
     const { profile } = useProfile();
@@ -62,11 +69,12 @@ export default function AIAssistant() {
         if (!user?.id) return;
         if (profile?.role === 'employer') {
             getCampaigns({ employer_id: user.id });
-        } else {
+        } else if (profile?.role === 'candidate') {
             getCampaigns({ status: 'active' });
             getCampaignApps({ candidate_id: user.id });
             getInvitations({ candidate_id: user.id });
         }
+        // admin: no campaign fetching needed
     }, [user?.id, profile?.role]);
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState('');
@@ -74,6 +82,7 @@ export default function AIAssistant() {
     const [loading, setLoading] = useState(false);
     const [greeted, setGreeted] = useState(false);
     const [resumeText, setResumeText] = useState<string>('');
+    const [suspiciousUsers, setSuspiciousUsers] = useState<SuspiciousUser[]>([]);
     const bottomRef = useRef<HTMLDivElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -84,12 +93,23 @@ export default function AIAssistant() {
     }, [profile?.resume_url]);
 
     useEffect(() => {
+        if (open && profile?.role === 'admin' && suspiciousUsers.length === 0) {
+            detectSuspiciousUsers().then(setSuspiciousUsers);
+        }
+    }, [open, profile?.role]);
+
+    useEffect(() => {
         if (open && !greeted && profile) {
-            const isEmployer = profile?.role === 'employer';
+            const role = profile?.role;
             const firstName = profile?.full_name?.split(' ')[0] || 'there';
-            const greeting = isEmployer
-                ? `Hi ${firstName}! I'm Pani AI. I can help with reviewing candidates, writing job descriptions, recruitment strategies, and more. What do you need?`
-                : `Hi ${firstName}! I'm Pani AI. I can help with job applications, improving your profile, interview prep, and career advice. What's on your mind?`;
+            let greeting: string;
+            if (role === 'admin') {
+                greeting = `Hi ${firstName}! I'm Pani AI. I can help you monitor the platform, review moderation queues, analyse stats, and manage users. What do you need?`;
+            } else if (role === 'employer') {
+                greeting = `Hi ${firstName}! I'm Pani AI. I can help with reviewing candidates, writing job descriptions, recruitment strategies, and more. What do you need?`;
+            } else {
+                greeting = `Hi ${firstName}! I'm Pani AI. I can help with job applications, improving your profile, interview prep, and career advice. What's on your mind?`;
+            }
             setMessages([{ role: 'assistant', content: greeting }]);
             setGreeted(true);
         }
@@ -103,13 +123,52 @@ export default function AIAssistant() {
     }, [messages]);
 
     const buildSystemPrompt = () => {
-        const isEmployer = profile?.role === 'employer';
+        const role = profile?.role;
+        const isEmployer = role === 'employer';
+        const isAdmin = role === 'admin';
         const today = new Date();
         const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
         const base = `You are Pani AI, a concise and helpful recruitment assistant inside the Pani AI Recruitment platform. Keep responses brief (2-4 sentences max unless the user explicitly asks for detail). Be friendly and specific. IMPORTANT: Only state facts that are present in the data provided below. Never invent or estimate numbers, job counts, or statistics. If you don't have the data to answer, say so honestly. Today is ${todayStr}.`;
         const pageSection = pageContext
             ? `\n\nCURRENT PAGE CONTEXT — The user is on the "${pageContext.page}" page. Use this data to answer questions about what they're looking at:\n${pageContext.summary}`
             : '';
+
+        if (isAdmin) {
+            const totalJobs = jobs.length;
+            const activeJobs = jobs.filter((j: any) => j.is_active === true || j.status === 'Active').length;
+            const pendingMod = jobs.filter((j: any) => j.moderation_status === 'pending').length;
+            const flaggedJobs = jobs.filter((j: any) => j.moderation_status === 'flagged').length;
+            const rejectedJobs = jobs.filter((j: any) => j.moderation_status === 'rejected').length;
+
+            const highRisk = suspiciousUsers.filter(u => u.risk_level === 'high');
+            const mediumRisk = suspiciousUsers.filter(u => u.risk_level === 'medium');
+            const suspiciousSection = suspiciousUsers.length > 0
+                ? `\n\nSUSPICIOUS USERS DETECTED (${suspiciousUsers.length} total — ${highRisk.length} high risk, ${mediumRisk.length} medium risk):
+${suspiciousUsers.slice(0, 15).map(u =>
+    `- ${u.full_name || '(no name)'} | ${u.email} | Role: ${u.role} | Risk: ${u.risk_level.toUpperCase()}${u.is_suspended ? ' | SUSPENDED' : ''} | Flags: ${u.reasons.join('; ')}`
+).join('\n')}${suspiciousUsers.length > 15 ? `\n...and ${suspiciousUsers.length - 15} more.` : ''}
+
+When asked about platform safety, suspicious accounts, or fake users, proactively highlight the high-risk accounts above. Advise the admin to review them at Admin → Users → "Suspicious" filter, where they can suspend or delete accounts.`
+                : '\n\nSUSPICIOUS USERS: None detected at this time.';
+
+            return `${base}
+You are helping the PLATFORM ADMIN: ${profile?.full_name || 'Admin'} (${profile?.email || 'admin@pani.com'}).
+You have full platform visibility. Do NOT treat this user as an employer or candidate.
+
+PLATFORM OVERVIEW:
+Total jobs on platform: ${totalJobs}
+Active jobs: ${activeJobs}
+Jobs pending moderation: ${pendingMod}
+Flagged jobs: ${flaggedJobs}
+Rejected jobs: ${rejectedJobs}
+Total applications: ${applications.length}
+
+MODERATION QUEUE:
+${pendingMod > 0 ? `${pendingMod} job(s) are pending review.` : 'No jobs pending review.'}
+${flaggedJobs > 0 ? `${flaggedJobs} job(s) are flagged for review.` : ''}${suspiciousSection}
+
+Help with: platform moderation, user management, analytics, content review, system configuration, support tickets, and recruitment platform operations.${pageSection}`;
+        }
 
         if (isEmployer) {
             const myJobs = jobs.filter(j => j.employer_id === profile?.id);
@@ -260,7 +319,7 @@ Use these exact figures when answering. Help with: job search, profile, cover le
     if (!user) return null;
 
     const suggestions = pageContext?.suggestions
-        ?? (profile?.role === 'employer' ? SUGGESTED_EMPLOYER : SUGGESTED_CANDIDATE);
+        ?? (profile?.role === 'admin' ? SUGGESTED_ADMIN : profile?.role === 'employer' ? SUGGESTED_EMPLOYER : SUGGESTED_CANDIDATE);
     const showSuggestions = messages.length <= 1;
 
     return (
@@ -270,7 +329,9 @@ Use these exact figures when answering. Help with: job search, profile, cover le
                 <button
                     onClick={() => setOpen(true)}
                     title="Ask Pani AI"
-                    className="fixed bottom-[88px] right-4 md:bottom-6 md:right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-primary/40 hover:scale-105 transition-all flex items-center justify-center"
+                    className={`fixed right-4 md:right-6 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-primary/40 hover:scale-105 transition-all flex items-center justify-center ${
+                        profile?.role === 'admin' ? 'bottom-6' : 'bottom-[88px] md:bottom-6'
+                    }`}
                 >
                     <Sparkles className="h-6 w-6" />
                 </button>
@@ -278,7 +339,9 @@ Use these exact figures when answering. Help with: job search, profile, cover le
 
             {/* Chat Panel */}
             {open && (
-                <div className="fixed inset-x-0 bottom-16 md:bottom-0 md:inset-x-auto md:bottom-6 md:right-6 z-50 w-full md:w-[360px] flex flex-col rounded-t-2xl md:rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden"
+                <div className={`fixed inset-x-0 md:inset-x-auto md:right-6 z-50 w-full md:w-[360px] flex flex-col rounded-t-2xl md:rounded-2xl border border-border/60 bg-card shadow-2xl overflow-hidden ${
+                    profile?.role === 'admin' ? 'bottom-0 md:bottom-6' : 'bottom-16 md:bottom-6'
+                }`}
                     style={{ maxHeight: 'min(520px, calc(100vh - 56px))' }}>
 
                     {/* Header */}

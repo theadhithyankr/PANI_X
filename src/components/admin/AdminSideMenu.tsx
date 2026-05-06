@@ -8,6 +8,9 @@ import {
     LogOut,
     Moon,
     Sun,
+    Flag,
+    TrendingUp,
+    Headphones,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
@@ -16,12 +19,15 @@ import { cn } from '../../lib/utils';
 import { Button } from '../ui/button';
 
 const menuItems = [
-    { text: 'Dashboard', icon: LayoutDashboard, path: '/admin' },
-    { text: 'Users', icon: Users, path: '/admin/users' },
-    { text: 'Job Listings', icon: Briefcase, path: '/admin/jobs' },
-    { text: 'Analytics', icon: BarChart3, path: '/admin/analytics' },
-    { text: 'Settings', icon: Settings, path: '/admin/settings' },
-    { text: 'Security', icon: ShieldCheck, path: '/admin/security' },
+    { text: 'Dashboard',   icon: LayoutDashboard, path: '/admin' },
+    { text: 'Users',       icon: Users,           path: '/admin/users' },
+    { text: 'Job Listings',icon: Briefcase,       path: '/admin/jobs' },
+    { text: 'Analytics',   icon: BarChart3,       path: '/admin/analytics' },
+    { text: 'Settings',    icon: Settings,        path: '/admin/settings' },
+    { text: 'Security',    icon: ShieldCheck,     path: '/admin/security' },
+    { text: 'Moderation',  icon: Flag,            path: '/admin/moderation' },
+    { text: 'Reports',     icon: TrendingUp,      path: '/admin/reports' },
+    { text: 'Support',     icon: Headphones,      path: '/admin/support' },
 ];
 
 export default function AdminSideMenu() {
@@ -38,8 +44,8 @@ export default function AdminSideMenu() {
 
     return (
         <div className="flex h-full w-full flex-col justify-between bg-card text-card-foreground">
-            <div className="flex flex-col">
-                <div className="flex items-center gap-2 p-6">
+            <div className="flex flex-col min-h-0 flex-1 overflow-y-auto">
+                <div className="flex items-center gap-2 p-6 shrink-0">
                     <img
                         src={theme === 'dark' ? '/pani-logo-dark.png' : '/pani-logo-light.png'}
                         alt="Pani"

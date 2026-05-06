@@ -28,6 +28,9 @@ import AdminJobs from './pages/admin/AdminJobs';
 import AdminAnalytics from './pages/admin/AdminAnalytics';
 import AdminSettings from './pages/admin/AdminSettings';
 import AdminSecurity from './pages/admin/AdminSecurity';
+import AdminContentModeration from './pages/admin/AdminContentModeration';
+import AdminPerformanceReports from './pages/admin/AdminPerformanceReports';
+import AdminSupport from './pages/admin/AdminSupport';
 import ResetPassword from './pages/ResetPassword';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -91,6 +94,9 @@ function App() {
                                 <Route path="/admin/analytics" element={<AuthGuard requiredRole="admin"><AdminAnalytics /></AuthGuard>} />
                                 <Route path="/admin/settings" element={<AuthGuard requiredRole="admin"><AdminSettings /></AuthGuard>} />
                                 <Route path="/admin/security" element={<AuthGuard requiredRole="admin"><AdminSecurity /></AuthGuard>} />
+                                <Route path="/admin/moderation" element={<AuthGuard requiredRole="admin"><AdminContentModeration /></AuthGuard>} />
+                                <Route path="/admin/reports" element={<AuthGuard requiredRole="admin"><AdminPerformanceReports /></AuthGuard>} />
+                                <Route path="/admin/support" element={<AuthGuard requiredRole="admin"><AdminSupport /></AuthGuard>} />
                             </Routes>
                             <AIAssistant />
                         </>

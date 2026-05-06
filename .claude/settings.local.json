@@ -21,7 +21,10 @@
       "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\aswin\\\\Documents\\\\Pani\\\\src\" -Recurse -Directory)",
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\aswin\\\\Documents\\\\Pani\" | Where-Object { $_.Name -ne \"node_modules\" -and $_.Name -ne \"pani-vite\" } | Select-Object Name, PSIsContainer)",
       "PowerShell(Copy-Item *)",
-      "Bash(xargs grep *)"
+      "Bash(xargs grep *)",
+      "Bash(Select-Object Name, FullName)",
+      "Bash(Select-Object Name, Mode)",
+      "Bash(Get-ChildItem *)"
     ]
   }
 }
