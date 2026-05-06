@@ -3,7 +3,10 @@ import { Bot, X, Send, Sparkles } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePageContext } from '../contexts/PageContext';
 import { getGemmaCompletion } from '../services/huggingface';
-import { useProfile, useJobs, useApplications, useDashboardStats, useCandidates } from '../hooks/useSupabase';
+import {
+    useProfile, useJobs, useApplications, useDashboardStats, useCandidates,
+    useInterviews, useCampaigns, useCampaignApplications, useCampaignInvitations,
+} from '../hooks/useSupabase';
 import { calculateJobMatch } from '../utils/ai';
 import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
@@ -49,7 +52,22 @@ export default function AIAssistant() {
     const { applications } = useApplications();
     const { stats } = useDashboardStats();
     const { candidates } = useCandidates();
+    const { interviews } = useInterviews();
+    const { campaigns, getCampaigns } = useCampaigns();
+    const { applications: campaignApps, getApplications: getCampaignApps } = useCampaignApplications();
+    const { invitations, getInvitations } = useCampaignInvitations();
     const { pageContext } = usePageContext();
+
+    useEffect(() => {
+        if (!user?.id) return;
+        if (profile?.role === 'employer') {
+            getCampaigns({ employer_id: user.id });
+        } else {
+            getCampaigns({ status: 'active' });
+            getCampaignApps({ candidate_id: user.id });
+            getInvitations({ candidate_id: user.id });
+        }
+    }, [user?.id, profile?.role]);
     const [open, setOpen] = useState(false);
     const [input, setInput] = useState('');
     const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -86,58 +104,131 @@ export default function AIAssistant() {
 
     const buildSystemPrompt = () => {
         const isEmployer = profile?.role === 'employer';
-        const base = `You are Pani AI, a concise and helpful recruitment assistant inside the Pani AI Recruitment platform. Keep responses brief (2-4 sentences max unless the user explicitly asks for detail). Be friendly and specific. IMPORTANT: Only state facts that are present in the data provided below. Never invent or estimate numbers, job counts, or statistics. If you don't have the data to answer, say so honestly. Today: ${new Date().toLocaleDateString()}.`;
+        const today = new Date();
+        const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const base = `You are Pani AI, a concise and helpful recruitment assistant inside the Pani AI Recruitment platform. Keep responses brief (2-4 sentences max unless the user explicitly asks for detail). Be friendly and specific. IMPORTANT: Only state facts that are present in the data provided below. Never invent or estimate numbers, job counts, or statistics. If you don't have the data to answer, say so honestly. Today is ${todayStr}.`;
         const pageSection = pageContext
             ? `\n\nCURRENT PAGE CONTEXT — The user is on the "${pageContext.page}" page. Use this data to answer questions about what they're looking at:\n${pageContext.summary}`
             : '';
 
         if (isEmployer) {
-            const jobList = jobs.filter(j => j.employer_id === profile?.id).map(j => `- "${j.role}" | ${j.location} | ${j.type} | ${j.status} | ${j.applicants_count} applicants | Skills required: ${(j.skills || []).join(', ') || 'not specified'} | Experience: ${j.experience_level || 'not specified'}`).join('\n') || 'No jobs posted yet.';
-            const topCandidates = candidates.slice(0, 10).map(c => `- ${c.full_name} | ${c.role} | ${c.experience} yrs | Skills: ${(c.skills || []).slice(0, 5).join(', ')} | Match: ${c.match_score}%`).join('\n') || 'No candidates found.';
-            return `${base}
-You are helping employer: ${profile?.full_name || 'User'} from ${profile?.company_name || 'their company'}.
+            const myJobs = jobs.filter(j => j.employer_id === profile?.id);
+            const jobList = myJobs.map(j =>
+                `- "${j.role}" | ${j.location} | ${j.type} | ${j.status} | ${j.applicants_count} applicants | Skills: ${(j.skills || []).join(', ') || 'not specified'} | Experience: ${j.experience_level || 'not specified'}`
+            ).join('\n') || 'No jobs posted yet.';
 
-REAL DATA from their account:
+            const topCandidates = candidates.slice(0, 10).map(c =>
+                `- ${c.full_name} | ${c.role} | ${c.experience} yrs exp | Skills: ${(c.skills || []).slice(0, 5).join(', ')} | Match: ${c.match_score}% | Location: ${c.location}`
+            ).join('\n') || 'No candidates found.';
+
+            const interviewList = interviews.length > 0
+                ? interviews.map(inv => {
+                    const start = new Date(inv.start_time);
+                    const isToday = start.toDateString() === today.toDateString();
+                    const dateLabel = isToday ? 'Today' : start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                    const timeLabel = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    return `- ${dateLabel} at ${timeLabel} | Candidate: ${inv.name} | Role: ${inv.role} | Type: ${inv.type} | Status: ${inv.status}`;
+                }).join('\n')
+                : 'No interviews scheduled.';
+
+            const todayInterviews = interviews.filter(inv => new Date(inv.start_time).toDateString() === today.toDateString());
+            const upcomingInterviews = interviews.filter(inv => new Date(inv.start_time) > today);
+
+            const campaignList = campaigns.length > 0
+                ? campaigns.map(c => {
+                    const appCount = campaignApps.filter(a => a.campaign_id === c.id).length;
+                    return `- "${c.name}" | Status: ${c.status} | Visibility: ${c.visibility} | ${appCount} applicants | Job: ${c.job?.role || 'N/A'} | ${c.rounds?.length || 0} rounds | ${new Date(c.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(c.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+                }).join('\n')
+                : 'No campaigns created.';
+
+            return `${base}
+You are helping employer: ${profile?.full_name || 'User'} from ${profile?.company_name || 'their company'} (${profile?.location || 'location not set'}).
+
+ACCOUNT SUMMARY:
 Active jobs: ${stats.activeJobs ?? 0}
 Total applicants: ${stats.totalApplicants ?? 0}
-Interviews scheduled: ${stats.interviewsToday ?? 0}
+Interviews today: ${todayInterviews.length} | Upcoming: ${upcomingInterviews.length}
 Pipeline — Applied: ${stats.pipeline?.applied ?? 0}, Screening: ${stats.pipeline?.screening ?? 0}, Interview: ${stats.pipeline?.interview ?? 0}, Offer: ${stats.pipeline?.offer ?? 0}
 
-Their job listings:
+INTERVIEWS (full schedule):
+${interviewList}
+
+JOB LISTINGS:
 ${jobList}
 
-Top matched candidates (ranked by match score to their jobs):
+HIRING CAMPAIGNS:
+${campaignList}
+
+TOP CANDIDATES (by match score):
 ${topCandidates}
 
-Only answer using this data. Help with: candidate evaluation, job postings, recruitment best practices, interview techniques.${pageSection}`;
+Only answer using this data. Help with: candidate evaluation, job postings, campaigns, interview scheduling, recruitment best practices.${pageSection}`;
         } else {
-            const appList = applications.map(a => `- "${a.role}" at ${a.company} (status: ${a.status})`).join('\n') || 'No applications yet.';
+            const appList = applications.map(a =>
+                `- "${a.role}" at ${a.company} | Status: ${a.status} | Applied: ${a.date || 'recently'}`
+            ).join('\n') || 'No applications yet.';
+
+            const interviewList = interviews.length > 0
+                ? interviews.map(inv => {
+                    const start = new Date(inv.start_time);
+                    const isToday = start.toDateString() === today.toDateString();
+                    const dateLabel = isToday ? 'Today' : start.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                    const timeLabel = start.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+                    return `- ${dateLabel} at ${timeLabel} | Role: ${inv.role} | Type: ${inv.type} | Status: ${inv.status}`;
+                }).join('\n')
+                : 'No interviews scheduled.';
+
             const scoredJobs = jobs.map(j => {
                 const { score, details } = calculateJobMatch(j, profile);
                 const matched = details.filter((d: any) => d.type === 'success').map((d: any) => d.label).join(', ');
                 const missing = details.filter((d: any) => d.type === 'warning').map((d: any) => d.label).join(', ');
                 return { role: j.role, company: j.company_name, location: j.location, score, matched, missing };
             }).sort((a, b) => b.score - a.score);
+
             const jobMatchList = scoredJobs.slice(0, 10).map(j =>
                 `- "${j.role}" at ${j.company} (${j.location}) — Match: ${j.score}%${j.matched ? ` | Strengths: ${j.matched}` : ''}${j.missing ? ` | Missing: ${j.missing}` : ''}`
             ).join('\n') || 'No jobs available.';
+
+            const invitedIds = new Set(invitations.map(i => i.campaign_id));
+            const appliedIds = new Set(campaignApps.map(a => a.campaign_id));
+
+            const campaignList = campaigns.filter(c => c.visibility === 'public' || invitedIds.has(c.id)).slice(0, 10).map(c =>
+                `- "${c.name}" | Job: ${c.job?.role || 'N/A'} | Status: ${c.status} | ${new Date(c.start_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} – ${new Date(c.end_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} | Applied: ${appliedIds.has(c.id) ? 'Yes' : 'No'} | Invited: ${invitedIds.has(c.id) ? 'Yes' : 'No'} | Required skills: ${(c.required_skills || []).join(', ') || 'none specified'}`
+            ).join('\n') || 'No active campaigns.';
+
+            const myCampaignApps = campaignApps.slice(0, 10).map(a =>
+                `- Campaign: "${a.campaign?.name || 'Unknown'}" | Status: ${a.status} | Round: ${a.current_round}`
+            ).join('\n') || 'No campaign applications yet.';
+
             return `${base}
 You are helping job seeker: ${profile?.full_name || 'User'}.
-Their headline: ${profile?.headline || 'not set'}.
-Their skills: ${(profile?.skills || []).join(', ') || 'not listed'}.
-Their experience: ${profile?.experience_years || 0} years.
-Their location: ${profile?.location || 'not set'}.
+Headline: ${profile?.headline || 'not set'}.
+Skills: ${(profile?.skills || []).join(', ') || 'not listed'}.
+Experience: ${profile?.experience_years || 0} years.
+Location: ${profile?.location || 'not set'}.
 
-REAL DATA from their account:
-Total applications submitted: ${applications.length}
-Their applications:
+ACCOUNT SUMMARY:
+Total job applications: ${applications.length}
+Interviews scheduled: ${interviews.length}
+
+JOB APPLICATIONS:
 ${appList}
 
-Job match scores (calculated from their actual profile vs job requirements):
-${jobMatchList}
-${resumeText ? 'Resume content (use this to give specific feedback when asked about their resume):\n' + resumeText : 'No resume uploaded yet.'}
+INTERVIEWS:
+${interviewList}
 
-Use these exact match percentages when asked about job matching. When asked about their resume, analyze the resume content above directly. Help with: job search, profile improvement, cover letters, interview prep.${pageSection}`;
+JOB MATCH SCORES (calculated from profile vs job requirements):
+${jobMatchList}
+
+HIRING CAMPAIGNS (available to apply):
+${campaignList}
+
+MY CAMPAIGN APPLICATIONS:
+${myCampaignApps}
+
+${resumeText ? `RESUME CONTENT:\n${resumeText}` : 'No resume uploaded yet.'}
+
+Use these exact figures when answering. Help with: job search, profile, cover letters, interview prep, campaigns.${pageSection}`;
         }
     };
 

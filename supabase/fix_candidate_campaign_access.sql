@@ -7,10 +7,11 @@ DROP POLICY IF EXISTS "Candidates can read invited campaigns" ON hiring_campaign
 DROP POLICY IF EXISTS "Candidates can view public campaigns" ON hiring_campaigns;
 DROP POLICY IF EXISTS "Candidates can view accessible campaigns" ON hiring_campaigns;
 
--- Drop old campaign_rounds candidate policies
+-- Drop old campaign_rounds candidate policies (all known variants)
 DROP POLICY IF EXISTS "Candidates can read rounds for applied campaigns" ON campaign_rounds;
 DROP POLICY IF EXISTS "Candidates can read rounds for public campaigns" ON campaign_rounds;
 DROP POLICY IF EXISTS "Anyone can view rounds for accessible campaigns" ON campaign_rounds;
+DROP POLICY IF EXISTS "Candidates can view rounds for accessible campaigns" ON campaign_rounds;
 
 -- ── hiring_campaigns: candidate read ──────────────────────────
 -- Candidates (and any authenticated user) can see:

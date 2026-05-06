@@ -18,6 +18,7 @@ import {
     useCampaignRounds,
 } from '../../hooks/useSupabase';
 import type { Campaign, CampaignApplication, CampaignRound } from '../../hooks/useSupabase';
+import { calculateJobMatch } from '../../utils/ai';
 import { useToast } from '../../contexts/ToastContext';
 import PipelineBuilderModal from '../../components/employer/PipelineBuilderModal';
 
@@ -241,6 +242,11 @@ export default function EmployerCampaignDashboard() {
         }
     };
 
+    const getMatchScore = (app: CampaignApplication) => {
+        if (!campaign?.job || !app.candidate) return 0;
+        return calculateJobMatch(campaign.job, app.candidate).score;
+    };
+
     const filteredApplications = applications.filter(app => {
         const nameMatch = (app.candidate?.full_name || '').toLowerCase().includes(search.toLowerCase());
         const roundMatch = roundFilter === 'all' || String(app.current_round) === roundFilter;
@@ -458,7 +464,7 @@ export default function EmployerCampaignDashboard() {
                                                             </td>
                                                             <td className="px-4 py-3 text-center">
                                                                 <span className="text-sm font-semibold text-foreground">
-                                                                    {app.candidate?.match_score ?? '-'}%
+                                                                    {getMatchScore(app)}%
                                                                 </span>
                                                             </td>
                                                             <td className="px-4 py-3 text-muted-foreground text-sm">
@@ -506,7 +512,7 @@ export default function EmployerCampaignDashboard() {
                                                             <Badge variant="outline" className={`capitalize text-xs ${getStatusBadgeClass(app.status)}`}>
                                                                 {app.status}
                                                             </Badge>
-                                                            <span className="text-xs text-muted-foreground">{app.candidate?.match_score ?? 0}% match</span>
+                                                            <span className="text-xs text-muted-foreground">{getMatchScore(app)}% match</span>
                                                         </div>
                                                     </div>
                                                     <Button

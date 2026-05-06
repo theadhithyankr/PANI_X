@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
+import { useFavicon } from '../hooks/useFavicon';
 
 type Theme = 'light' | 'dark';
 
@@ -23,6 +24,9 @@ function resolveInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
     const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
+
+    // Update favicon when theme changes
+    useFavicon(theme);
 
     useEffect(() => {
         document.documentElement.classList.toggle('dark', theme === 'dark');

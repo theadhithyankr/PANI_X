@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Favicon Generator - Pani</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            margin-bottom: 30px;
+        }
+        .preview-section {
+            display: flex;
+            gap: 30px;
+            margin-top: 30px;
+        }
+        .preview-box {
+            flex: 1;
+            text-align: center;
+        }
+        canvas {
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        label {
+            display: block;
+            margin: 10px 0 5px;
+            font-weight: bold;
+        }
+        input[type="range"] {
+            width: 100%;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Pani Favicon Generator</h1>
+        
+        <div class="upload-section">
+            <h3>Dark Mode Favicon</h3>
+            <input type="file" id="darkImage" accept="image/*">
+            <div class="controls">
+                <label>Zoom: <span id="darkZoomValue">1.0</span>x</label>
+                <input type="range" id="darkZoom" min="0.5" max="3" step="0.1" value="1.0">
+                <label>Horizontal Position: <span id="darkXValue">0</span>px</label>
+                <input type="range" id="darkX" min="-100" max="100" step="1" value="0">
+                <label>Vertical Position: <span id="darkYValue">0</span>px</label>
+                <input type="range" id="darkY" min="-100" max="100" step="1" value="0">
+            </div>
+        </div>
+
+        <div class="upload-section">
+            <h3>Light Mode Favicon</h3>
+            <input type="file" id="lightImage" accept="image/*">
+            <div class="controls">
+                <label>Zoom: <span id="lightZoomValue">1.0</span>x</label>
+                <input type="range" id="lightZoom" min="0.5" max="3" step="0.1" value="1.0">
+                <label>Horizontal Position: <span id="lightXValue">0</span>px</label>
+                <input type="range" id="lightX" min="-100" max="100" step="1" value="0">
+                <label>Vertical Position: <span id="lightYValue">0</span>px</label>
+                <input type="range" id="lightY" min="-100" max="100" step="1" value="0">
+            </div>
+        </div>
+
+        <div class="preview-section">
+            <div class="preview-box">
+                <h4>Dark Mode Preview</h4>
+                <canvas id="darkCanvas" width="32" height="32"></canvas>
+                <br>
+                <button id="downloadDark">Download Dark Favicon</button>
+            </div>
+            <div class="preview-box">
+                <h4>Light Mode Preview</h4>
+                <canvas id="lightCanvas" width="32" height="32"></canvas>
+                <br>
+                <button id="downloadLight">Download Light Favicon</button>
+            </div>
+        </div>
+
+        <div style="margin-top: 30px; padding: 15px; background: #e3f2fd; border-radius: 4px;">
+            <strong>Instructions:</strong>
+            <ol>
+                <li>Upload your dark mode image (pani_darkmode.png)</li>
+                <li>Upload your light mode image (pani light mode.png)</li>
+                <li>Adjust zoom and position to make the logo clearly visible</li>
+                <li>Download both favicons</li>
+                <li>Replace the files in the <code>public/</code> folder:
+                    <ul>
+                        <li>Save dark as <code>pani-favicon-dark.png</code></li>
+                        <li>Save light as <code>pani-favicon-light.png</code></li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        const darkImg = new Image();
+        const lightImg = new Image();
+        
+        const darkCanvas = document.getElementById('darkCanvas');
+        const lightCanvas = document.getElementById('lightCanvas');
+        const darkCtx = darkCanvas.getContext('2d');
+        const lightCtx = lightCanvas.getContext('2d');
+
+        let darkSettings = { zoom: 1.0, x: 0, y: 0 };
+        let lightSettings = { zoom: 1.0, x: 0, y: 0 };
+
+        function drawImage(img, canvas, ctx, settings) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            const scale = settings.zoom;
+            const width = canvas.width * scale;
+            const height = canvas.height * scale;
+            const x = (canvas.width - width) / 2 + settings.x;
+            const y = (canvas.height - height) / 2 + settings.y;
+            
+            ctx.drawImage(img, x, y, width, height);
+        }
+
+        // Dark mode handlers
+        document.getElementById('darkImage').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    darkImg.onload = () => drawImage(darkImg, darkCanvas, darkCtx, darkSettings);
+                    darkImg.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('darkZoom').addEventListener('input', (e) => {
+            darkSettings.zoom = parseFloat(e.target.value);
+            document.getElementById('darkZoomValue').textContent = darkSettings.zoom.toFixed(1);
+            if (darkImg.src) drawImage(darkImg, darkCanvas, darkCtx, darkSettings);
+        });
+
+        document.getElementById('darkX').addEventListener('input', (e) => {
+            darkSettings.x = parseInt(e.target.value);
+            document.getElementById('darkXValue').textContent = darkSettings.x;
+            if (darkImg.src) drawImage(darkImg, darkCanvas, darkCtx, darkSettings);
+        });
+
+        document.getElementById('darkY').addEventListener('input', (e) => {
+            darkSettings.y = parseInt(e.target.value);
+            document.getElementById('darkYValue').textContent = darkSettings.y;
+            if (darkImg.src) drawImage(darkImg, darkCanvas, darkCtx, darkSettings);
+        });
+
+        // Light mode handlers
+        document.getElementById('lightImage').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    lightImg.onload = () => drawImage(lightImg, lightCanvas, lightCtx, lightSettings);
+                    lightImg.src = event.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        document.getElementById('lightZoom').addEventListener('input', (e) => {
+            lightSettings.zoom = parseFloat(e.target.value);
+            document.getElementById('lightZoomValue').textContent = lightSettings.zoom.toFixed(1);
+            if (lightImg.src) drawImage(lightImg, lightCanvas, lightCtx, lightSettings);
+        });
+
+        document.getElementById('lightX').addEventListener('input', (e) => {
+            lightSettings.x = parseInt(e.target.value);
+            document.getElementById('lightXValue').textContent = lightSettings.x;
+            if (lightImg.src) drawImage(lightImg, lightCanvas, lightCtx, lightSettings);
+        });
+
+        document.getElementById('lightY').addEventListener('input', (e) => {
+            lightSettings.y = parseInt(e.target.value);
+            document.getElementById('lightYValue').textContent = lightSettings.y;
+            if (lightImg.src) drawImage(lightImg, lightCanvas, lightCtx, lightSettings);
+        });
+
+        // Download handlers
+        document.getElementById('downloadDark').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'pani-favicon-dark.png';
+            link.href = darkCanvas.toDataURL();
+            link.click();
+        });
+
+        document.getElementById('downloadLight').addEventListener('click', () => {
+            const link = document.createElement('a');
+            link.download = 'pani-favicon-light.png';
+            link.href = lightCanvas.toDataURL();
+            link.click();
+        });
+    </script>
+</body>
+</html>

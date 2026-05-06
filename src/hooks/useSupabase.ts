@@ -796,10 +796,15 @@ export function useDashboardStats() {
                 .select('*', { count: 'exact', head: true })
                 .eq('candidate_id', user.id);
 
-            // Mock profile views for now
+            const { data: profileData } = await supabase
+                .from('profiles')
+                .select('profile_views')
+                .eq('id', user.id)
+                .single();
+
             newStats.totalApplications = appCount || 0;
             newStats.interviewsScheduled = invCount || 0;
-            newStats.profileViews = 14;
+            newStats.profileViews = profileData?.profile_views || 0;
         } else {
             // Employer
             const { count: jobCount } = await supabase

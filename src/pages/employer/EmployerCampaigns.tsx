@@ -4,7 +4,7 @@ import EmployerLayout from '../../components/employer/EmployerLayout';
 import { Card, CardContent } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
 import { Plus, MoreVertical, Pencil, Trash2, BarChart3, Loader2, Calendar, Users, Briefcase, Filter, Zap, GitBranch } from 'lucide-react';
-import { useCampaigns } from '../../hooks/useSupabase';
+import { useCampaigns, useCampaignApplications } from '../../hooks/useSupabase';
 import { useToast } from '../../contexts/ToastContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../../components/ui/dropdown-menu';
@@ -16,6 +16,7 @@ import PipelineBuilderModal from '../../components/employer/PipelineBuilderModal
 export default function EmployerCampaigns() {
     const { user } = useAuth();
     const { campaigns, loading, getCampaigns, deleteCampaign, updateCampaign } = useCampaigns();
+    const { applications: allApps, getApplications } = useCampaignApplications();
     const toast = useToast();
     const navigate = useNavigate();
 
@@ -25,10 +26,12 @@ export default function EmployerCampaigns() {
     const [pipelineOpen, setPipelineOpen] = useState(false);
     const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null);
 
-    // Fetch campaigns on mount
+    // Fetch campaigns and application counts on mount
     useEffect(() => {
         if (user?.id) {
             getCampaigns({ employer_id: user.id });
+            // Fetch all applications (RLS scopes to this employer's campaigns)
+            getApplications();
         }
     }, [user?.id]);
 
@@ -82,10 +85,8 @@ export default function EmployerCampaigns() {
         return `${start} - ${end}`;
     };
 
-    // Calculate applicant count (placeholder - will be implemented with applications)
-    const getApplicantCount = (_campaignId: string) => {
-        // TODO: Implement actual count from campaign_applications table
-        return 0;
+    const getApplicantCount = (campaignId: string) => {
+        return allApps.filter(a => a.campaign_id === campaignId).length;
     };
 
     return (
