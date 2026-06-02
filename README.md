@@ -1,47 +1,49 @@
-# PANI X
+# Pani Recruitment Inbox
 
-## Overview
-PANI X is a React and Supabase recruitment platform update focused on inbox visibility and application communication. The repository includes implementation notes, architecture diagrams, database migration guidance, and frontend code for dynamic unread counts.
+React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking.
 
-## Features
-- Dynamic inbox unread count replacing a static indicator.
-- Tracking for unread messages, application updates, and scheduled interviews.
-- Supabase-backed application and message state updates.
-- Candidate and employer workflow documentation.
-- Architecture, flow, block, and presentation diagrams.
+## Key Features
+- React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking
+- Supabase integration is called out for the data, auth, or application state layer present in the codebase.
+- Includes management-facing screens such as admin, dashboard, or coordinator workflows where present.
+- Organized UI components and screens make the main user flows visible from the project structure.
+- Existing media assets are referenced only where they are already present in the repository.
+- Package scripts provide reproducible development, build, and preview commands.
 
 ## Tech Stack
+- JavaScript/TypeScript
 - React
-- TypeScript
 - Vite
-- Supabase
 - Tailwind CSS
-- Vitest
+- Supabase
+- HTML/CSS
 
-## Development
-Install dependencies:
+## Project Structure
+- src/app or app - application routes, screens, and layout files.
+- components - reusable UI and workflow components.
+- public / assets - static images, icons, manifests, and visual assets.
 
+## Setup and Run
 ```bash
+git clone https://github.com/theadhithyankr/pani-recruitment-inbox.git
+cd pani-recruitment-inbox
 npm install
-```
-
-Start the development server:
-
-```bash
 npm run dev
-```
-
-Build for production:
-
-```bash
 npm run build
+npm run preview
 ```
 
-Run tests:
+## Screenshots and Media
+- Existing asset: public/logo.png
+- Existing asset: public/pani-favicon-dark.png
+- Existing asset: public/pani-favicon-light.png
+- Existing asset: public/pani-logo-dark.png
+- Existing asset: public/pani-logo-light.png
 
-```bash
-npm run test
-```
+## What This Project Demonstrates
+- Building user-facing web applications with component-based UI and modern frontend tooling.
+- Integrating managed backend services for auth, persistence, realtime data, or app infrastructure.
+- Presenting project scope, setup, and technical choices clearly for reviewers and recruiters.
 
-## Status
-Recruitment platform iteration with database migration notes and presentation assets.
+## Repository
+- GitHub: https://github.com/theadhithyankr/pani-recruitment-inbox
