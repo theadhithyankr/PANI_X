@@ -14,7 +14,7 @@ Inbox-style workflow for reviewing and managing recruitment conversations.
 
 P.A.N.I Recruitment Inbox is a recruitment inbox project in the TheAdhithyanKR/pani-recruitment-inbox repository. React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking.
 
-The README was written from the repository contents, including its manifest files, source tree, and available project metadata. The primary manifest is $(@{Path=package.json; Json=}.Path), and the commands below are taken from its scripts.
+The README was written from the repository contents, including its manifest files, source tree, and available project metadata. The primary manifest is `package.json`, and the commands below are taken from its scripts.
 
 ## Key Features
 
