@@ -1,49 +1,80 @@
-# Pani Recruitment Inbox
+<div align="center">
 
-React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking.
+# P.A.N.I Recruitment Inbox
+
+Inbox-style workflow for reviewing and managing recruitment conversations.
+
+![Vite](https://img.shields.io/badge/Vite-646CFF?logo=vite&logoColor=white) ![React](https://img.shields.io/badge/React-20232A?logo=react) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?logo=tailwindcss&logoColor=white) ![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?logo=supabase&logoColor=white)
+
+[Repository](https://github.com/theadhithyankr/pani-recruitment-inbox)
+
+</div>
+
+## Overview
+
+P.A.N.I Recruitment Inbox is a recruitment inbox project in the TheAdhithyanKR/pani-recruitment-inbox repository. React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking.
+
+The README was written from the repository contents, including its manifest files, source tree, and available project metadata. The primary manifest is $(System.Collections.Hashtable.Path), and the commands below are taken from its scripts.
 
 ## Key Features
-- React and Supabase recruitment platform update focused on dynamic inbox unread counts, messaging, and application tracking
-- Supabase integration is called out for the data, auth, or application state layer present in the codebase.
-- Includes management-facing screens such as admin, dashboard, or coordinator workflows where present.
-- Organized UI components and screens make the main user flows visible from the project structure.
-- Existing media assets are referenced only where they are already present in the repository.
-- Package scripts provide reproducible development, build, and preview commands.
+
+- Recruiter inbox interface concept
+- Conversation or candidate review workflow
+- Focused product surface for hiring operations
+- Clear demonstration of task-heavy dashboard design
 
 ## Tech Stack
-- JavaScript/TypeScript
-- React
+
 - Vite
+- React
 - Tailwind CSS
 - Supabase
-- HTML/CSS
 
 ## Project Structure
-- src/app or app - application routes, screens, and layout files.
-- components - reusable UI and workflow components.
-- public / assets - static images, icons, manifests, and visual assets.
 
-## Setup and Run
-```bash
-git clone https://github.com/theadhithyankr/pani-recruitment-inbox.git
-cd pani-recruitment-inbox
+`	ext
+.
+|-- .claude/settings.local.json
+|-- .env.example
+|-- .npmrc
+|-- ARCHITECTURE.md
+|-- BLOCK_DIAGRAM.md
+|-- components.json
+|-- favicon-generator.html
+|-- fix_campaigns_rls.sql
+|-- FLOW_DIAGRAM.md
+|-- IMPLEMENTATION_SUMMARY.md
+|-- INBOX_UPDATE_README.md
+|-- index.html
+|-- package.json
+|-- package-lock.json
+|-- pani light mode.png
+|-- pani_darkmode.png
+|-- postcss.config.js
+|-- PRESENTATION_DIAGRAMS.md
+|-- public/logo.png
+|-- public/pani-favicon-dark.png
+|-- public/pani-favicon-dark.svg
+|-- public/pani-favicon-light.png
+|-- public/pani-favicon-light.svg
+|-- public/pani-logo-dark.png
+`
+
+## Setup
+
+`ash
 npm install
 npm run dev
-npm run build
-npm run preview
-```
-
-## Screenshots and Media
-- Existing asset: public/logo.png
-- Existing asset: public/pani-favicon-dark.png
-- Existing asset: public/pani-favicon-light.png
-- Existing asset: public/pani-logo-dark.png
-- Existing asset: public/pani-logo-light.png
+`
 
 ## What This Project Demonstrates
-- Building user-facing web applications with component-based UI and modern frontend tooling.
-- Integrating managed backend services for auth, persistence, realtime data, or app infrastructure.
-- Presenting project scope, setup, and technical choices clearly for reviewers and recruiters.
 
-## Repository
-- GitHub: https://github.com/theadhithyankr/pani-recruitment-inbox
+- Ability to turn a focused product idea into a working codebase
+- Practical use of the repository's chosen framework and tooling
+- Attention to deployable structure, repeatable setup, and portfolio-ready presentation
+- Project-specific implementation around recruitment inbox
+
+## Links
+
+- Repository: [https://github.com/theadhithyankr/pani-recruitment-inbox](https://github.com/theadhithyankr/pani-recruitment-inbox)
+- Live demo: [https://pani-x.vercel.app](https://pani-x.vercel.app)
